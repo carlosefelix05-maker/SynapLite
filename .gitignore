@@ -1,0 +1,5 @@
+# La carpeta app/ la genera GitHub Actions con build_app.py
+app/
+.claude/
+.DS_Store
+__pycache__/

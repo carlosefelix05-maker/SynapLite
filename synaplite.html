@@ -595,13 +595,14 @@
 
 <div class="overlay" id="date-ov">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="date-title" style="max-width:380px">
-    <h3 id="date-title">Fecha del set de laboratorios</h3>
+    <h3 id="date-title">Set de laboratorios</h3>
     <label for="date-in">Fecha</label>
     <input type="date" id="date-in" onkeydown="if(event.key==='Enter')applyDateEdit()">
     <div class="menu">
       <button class="btn ghost" style="flex:1" onclick="closeDateEdit()">Cancelar</button>
       <button class="btn primary" style="flex:1.4" onclick="applyDateEdit()">Guardar fecha</button>
     </div>
+    <div class="mt" style="text-align:center"><button class="link" style="color:var(--danger)" onclick="deleteEditedSet()">Eliminar este set</button></div>
   </div>
 </div>
 
@@ -1460,7 +1461,7 @@ function labsTable(p){
   const recs=(p.labs||[]);
   if(!recs.length) return `<div class="muted-note">Sin laboratorios. Pega el primer set abajo.</div>`;
   const show=recs.slice(-6).reverse();
-  const header=`<th>Lab</th>`+show.map((r,i)=>`<th class="${i===0?'now':''}"><button class="thdate" onclick="editLabDate('${p.id}','${r.ts}')" title="Cambiar la fecha de este set">${fmtShort(r.ts)}</button></th>`).join("");
+  const header=`<th>Lab</th>`+show.map((r,i)=>`<th class="${i===0?'now':''}"><button class="thdate" onclick="editLabDate('${p.id}','${r.ts}')" title="Cambiar fecha o eliminar este set">${fmtShort(r.ts)}</button></th>`).join("");
   let body="";
   LAB_GROUPS.forEach(g=>{
     const fields=g.f.filter(f=>!f.text && show.some(r=>r[f.k]));
@@ -1761,6 +1762,15 @@ function editLabDate(id,ts){
   const inp=document.getElementById("date-in"); inp.max=todayStr(); inp.value=dayKey(ts);
   document.getElementById("date-ov").classList.add("on");
   setTimeout(()=>inp.focus(),60);
+}
+function deleteEditedSet(){
+  if(!dateEdit) return;
+  const {id,ts}=dateEdit, p=find(id), r=p&&(p.labs||[]).find(x=>x.ts===ts);
+  closeDateEdit(); if(!r) return;
+  const n=LAB_FIELDS.filter(f=>!f.text&&r[f.k]).length;
+  askConfirm(`¿Eliminar el set del ${fmtShort(r.ts)}?`,`Se borrarán sus ${n} valor${n===1?"":"es"} de laboratorio. No se puede deshacer.`,"Sí, eliminar",()=>{
+    p.labs=p.labs.filter(x=>x.ts!==ts); openPanes[id]="labs"; save(); refresh(id); toast("Set eliminado");
+  });
 }
 function closeDateEdit(){ document.getElementById("date-ov").classList.remove("on"); dateEdit=null; }
 function applyDateEdit(){

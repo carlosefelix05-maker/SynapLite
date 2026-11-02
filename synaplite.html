@@ -475,6 +475,8 @@
   @media(min-width:900px){ .vtiles{grid-template-columns:repeat(4,1fr)} .form-grid{grid-template-columns:repeat(4,1fr)} }
   @media(min-width:1360px){ .form-grid{grid-template-columns:repeat(6,1fr)} }
 
+  .thdate{background:none;border:none;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;padding:2px 4px;border-radius:var(--radius-sm);text-decoration:underline dotted;text-underline-offset:3px;cursor:pointer}
+  .thdate:hover{background:#ffffff26}
 </style>
 </head>
 <body>
@@ -587,6 +589,18 @@
     <div class="menu">
       <button class="btn ghost" style="flex:1" onclick="closeConfirm()">Cancelar</button>
       <button class="btn danger" style="flex:1.2" id="confirm-ok">Continuar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="date-ov">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="date-title" style="max-width:380px">
+    <h3 id="date-title">Fecha del set de laboratorios</h3>
+    <label for="date-in">Fecha</label>
+    <input type="date" id="date-in" onkeydown="if(event.key==='Enter')applyDateEdit()">
+    <div class="menu">
+      <button class="btn ghost" style="flex:1" onclick="closeDateEdit()">Cancelar</button>
+      <button class="btn primary" style="flex:1.4" onclick="applyDateEdit()">Guardar fecha</button>
     </div>
   </div>
 </div>
@@ -738,6 +752,7 @@ let selectedId = null;       // paciente abierto en el panel derecho
 const openPanes = {};
 const labDraft = {};        // borrador de pegado por paciente (no se persiste a propósito)
 const manualLabs = new Set();
+const labDate = {};         // fecha elegida para el próximo set, por paciente (yyyy-mm-dd)
 
 /* ---------------- almacenamiento ---------------- */
 function load(){ try{ const d=JSON.parse(localStorage.getItem(KEY)); if(d&&Array.isArray(d.patients)) return d; }catch(e){} return {patients:[]}; }
@@ -1413,11 +1428,18 @@ function labsPaneHTML(p){
       ${hits.length?`<div class="pv-chips">${hits.map(f=>{ const v=d.parsed.rec[f.k], st=labStatus(f.k,v,p,d.parsed.rec), dir=st?labDir(f.k,v,p,d.parsed.rec):"";
         return `<span class="pvc ${st}"><em>${f.label}</em><span class="num ${dir}">${esc(v)}</span></span>`; }).join("")}</div>`:`<div class="muted-note">No se reconoció ningún valor. Revisa que cada dato venga como “Etiqueta valor”.</div>`}
       ${d.parsed.unknown.length?`<div class="pv-warn">Sin reconocer: ${esc(d.parsed.unknown.slice(0,12).join(" · "))}</div>`:""}
-      ${hits.length?`<button class="btn primary full mt" onclick="commitLabs('${p.id}')">Guardar set del ${new Date().toLocaleDateString("es-MX",{day:"2-digit",month:"2-digit"})}</button>`:""}
+      ${hits.length?`<button class="btn primary full mt" onclick="commitLabs('${p.id}')">Guardar set del <span class="js-labdate-btn">${labDateLabel(p.id)}</span></button>`:""}
     </div>`;
   }
   return `<div class="sec-title">Comparativa</div>
     ${labsTable(p)}
+    <div class="sec-title">Fecha del set</div>
+    <div class="row">
+      <input type="date" id="labdate-${p.id}" value="${getLabDate(p.id)}" max="${todayStr()}" onchange="setLabDate('${p.id}',this.value)"
+        style="height:40px;background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);color:var(--text);padding:0 12px;font-size:16px;font-family:inherit">
+      <button class="btn ghost sm" onclick="setLabDate('${p.id}',todayStr())">Hoy</button>
+      <span class="stamp">Aplica al pegado y a la captura manual.</span>
+    </div>
     <div class="sec-title">Pegar laboratorios</div>
     <textarea id="paste-${p.id}" class="pres-area" style="min-height:96px" placeholder="Pega el párrafo tal cual: Glu 118, Ure 62, Bun 29, Cr 1.8, Na 138, K 3.2… Gasometría arterial: pH 7.31, pCO₂ 30, HCO₃ 15, Lactato 2.4.">${esc(d.text)}</textarea>
     <div class="add-row" style="margin-top:8px">
@@ -1434,7 +1456,7 @@ function labsTable(p){
   const recs=(p.labs||[]);
   if(!recs.length) return `<div class="muted-note">Sin laboratorios. Pega el primer set abajo.</div>`;
   const show=recs.slice(-6).reverse();
-  const header=`<th>Lab</th>`+show.map((r,i)=>`<th class="${i===0?'now':''}">${fmtShort(r.ts)}</th>`).join("");
+  const header=`<th>Lab</th>`+show.map((r,i)=>`<th class="${i===0?'now':''}"><button class="thdate" onclick="editLabDate('${p.id}','${r.ts}')" title="Cambiar la fecha de este set">${fmtShort(r.ts)}</button></th>`).join("");
   let body="";
   LAB_GROUPS.forEach(g=>{
     const fields=g.f.filter(f=>!f.text && show.some(r=>r[f.k]));
@@ -1619,11 +1641,29 @@ function saveVitals(id){
   if(save()) toast("Signos vitales guardados","ok");
   render();
 }
+/* Fecha de un set: hoy conserva la hora real; otro día se fija a las 12:00 locales.
+   Se evita repetir un ts exacto porque identifica al set al borrarlo o cambiarle la fecha. */
+function getLabDate(id){ return labDate[id]||todayStr(); }
+function setLabDate(id,v){
+  labDate[id]=(v&&v<=todayStr())?v:todayStr();
+  const el=document.getElementById("labdate-"+id); if(el&&el.value!==labDate[id]) el.value=labDate[id];
+  document.querySelectorAll(".js-labdate-btn").forEach(b=>b.textContent=labDateLabel(id));
+}
+function labDateLabel(id){ const [y,m,d]=getLabDate(id).split("-"); return d+"/"+m+(y!==String(new Date().getFullYear())?"/"+y:""); }
+function labTs(p,v){
+  let t=(v===todayStr())?new Date():new Date(v+"T12:00:00");
+  if(isNaN(t)) t=new Date();
+  const used=new Set((p.labs||[]).map(r=>r.ts));
+  while(used.has(t.toISOString())) t=new Date(t.getTime()+1000);
+  return t.toISOString();
+}
+function sortLabs(p){ p.labs.sort((a,b)=>a.ts<b.ts?-1:a.ts>b.ts?1:0); }
 function saveLabs(id){
   const p=find(id); if(!p) return;
   const rec=collectFields(LAB_FIELDS.filter(f=>!f.text),"lab",id);
   if(!rec){ toast("Captura al menos un laboratorio","err"); return; }
-  p.labs=p.labs||[]; p.labs.push(rec); openPanes[id]="labs";
+  rec.ts=labTs(p,getLabDate(id));
+  p.labs=p.labs||[]; p.labs.push(rec); sortLabs(p); delete labDate[id]; openPanes[id]="labs";
   if(save()) toast("Set capturado guardado","ok");
   refresh(id);
 }
@@ -1637,12 +1677,32 @@ function clearLabDraft(id){ delete labDraft[id]; openPanes[id]="labs"; refresh(i
 function toggleManual(id){ manualLabs.has(id)?manualLabs.delete(id):manualLabs.add(id); openPanes[id]="labs"; refresh(id); }
 function commitLabs(id){
   const p=find(id), d=labDraft[id]; if(!p||!d||!d.parsed) return;
-  const rec=Object.assign({ts:new Date().toISOString()}, d.parsed.rec);
+  const rec=Object.assign({ts:labTs(p,getLabDate(id))}, d.parsed.rec);
   const keys=Object.keys(rec).filter(k=>k!=="ts"&&k!=="gtipo");
   if(!keys.length){ toast("No hay valores que guardar","err"); return; }
-  p.labs=p.labs||[]; p.labs.push(rec);
-  delete labDraft[id]; openPanes[id]="labs";
+  p.labs=p.labs||[]; p.labs.push(rec); sortLabs(p);
+  delete labDraft[id]; delete labDate[id]; openPanes[id]="labs";
   if(save()) toast(`${keys.length} laboratorios guardados`,"ok");
+  refresh(id);
+}
+/* Cambiar la fecha de un set ya guardado */
+let dateEdit=null;
+function editLabDate(id,ts){
+  const p=find(id); if(!p) return;
+  dateEdit={id,ts};
+  const inp=document.getElementById("date-in"); inp.max=todayStr(); inp.value=dayKey(ts);
+  document.getElementById("date-ov").classList.add("on");
+  setTimeout(()=>inp.focus(),60);
+}
+function closeDateEdit(){ document.getElementById("date-ov").classList.remove("on"); dateEdit=null; }
+function applyDateEdit(){
+  const v=document.getElementById("date-in").value;
+  if(!dateEdit||!v||v>todayStr()){ toast("Elige una fecha válida (no futura)","err"); return; }
+  const p=find(dateEdit.id), r=p&&(p.labs||[]).find(x=>x.ts===dateEdit.ts); if(!r){ closeDateEdit(); return; }
+  const id=dateEdit.id;
+  if(dayKey(r.ts)!==v){ r.ts=labTs(p,v); sortLabs(p); }
+  closeDateEdit(); openPanes[id]="labs";
+  if(save()) toast("Fecha actualizada","ok");
   refresh(id);
 }
 function delLabSet(id,ts){
@@ -1930,11 +1990,13 @@ function importData(ev){
 
 /* ---------------- arranque ---------------- */
 document.getElementById("overlay").addEventListener("click",e=>{ if(e.target.id==="overlay") closeSheet(); });
+document.getElementById("date-ov").addEventListener("click",e=>{ if(e.target.id==="date-ov") closeDateEdit(); });
 document.getElementById("confirm-ov").addEventListener("click",e=>{ if(e.target.id==="confirm-ov") closeConfirm(); });
 document.getElementById("confirm-ok").addEventListener("click",()=>{ const cb=confirmCb; closeConfirm(); if(cb) cb(); });
 document.addEventListener("keydown",e=>{
   if(e.key==="Escape"){
-    if(document.getElementById("confirm-ov").classList.contains("on")) closeConfirm();
+    if(document.getElementById("date-ov").classList.contains("on")) closeDateEdit();
+    else if(document.getElementById("confirm-ov").classList.contains("on")) closeConfirm();
     else if(document.getElementById("lightbox").classList.contains("on")) closeLightbox();
     else if(document.getElementById("overlay").classList.contains("on")) closeSheet();
     else if(selectedId && !isDesktop()) closePatient();

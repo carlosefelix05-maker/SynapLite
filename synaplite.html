@@ -597,7 +597,7 @@
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="date-title" style="max-width:380px">
     <h3 id="date-title">Set de laboratorios</h3>
     <label for="date-in">Fecha</label>
-    <input type="date" id="date-in" onkeydown="if(event.key==='Enter')applyDateEdit()">
+    <div class="grid2"><input type="date" id="date-in" onkeydown="if(event.key==='Enter')applyDateEdit()"><input type="time" id="time-in" title="Hora (opcional)" onkeydown="if(event.key==='Enter')applyDateEdit()"></div>
     <div class="menu">
       <button class="btn ghost" style="flex:1" onclick="closeDateEdit()">Cancelar</button>
       <button class="btn primary" style="flex:1.4" onclick="applyDateEdit()">Guardar fecha</button>
@@ -753,6 +753,7 @@ let selectedId = null;       // paciente abierto en el panel derecho
 const openPanes = {};
 const labDraft = {};        // borrador de pegado por paciente (no se persiste a propósito)
 const manualLabs = new Set();
+const labTime = {};         // hora del set (HH:MM) si el párrafo la trae o se captura
 const labDate = {};         // fecha elegida para el próximo set, por paciente (yyyy-mm-dd)
 
 /* ---------------- almacenamiento ---------------- */
@@ -822,10 +823,44 @@ const UNIT_RE=/(^|[^a-z])(?:mg\s*\/\s*dl|g\s*\/\s*dl|mg\s*\/\s*l|ng\s*\/\s*ml|pg
 const PAIR_SPLIT_RE=/(^|[\s:=])([<>]?\s*-?\d+(?:\.\d+)?)\s+(?=[a-z])/g;
 function cleanNum(raw){ return String(raw).trim().replace(/\s+/g,"").replace(",", "."); }
 /* Lee un bloque de laboratorios pegado y devuelve {rec, unknown}. */
+/* Fecha y hora de los resultados escritas en el párrafo ("02/11/2026 06:30", "2 de nov 8:00 hrs",
+   "2026-11-02"). Se quitan del texto para que no se lean como valores. Sólo fechas pasadas o de hoy. */
+const MESES={ene:1,feb:2,mar:3,abr:4,may:5,jun:6,jul:7,ago:8,sep:9,set:9,oct:10,nov:11,dic:12};
+function extractWhen(t){
+  let date=null, time=null;
+  const y0=new Date().getFullYear(), pad=n=>String(n).padStart(2,"0");
+  const PRE="(?:(?:del?|el|fecha|a\\s+las?|las?)\\s+)?";     // "del ", "a las "…
+  const mk=(d,m,y)=>{
+    d=+d; m=+m; y=(y==null||y==="")?null:+y;
+    if(y!==null&&y<100) y+=2000;
+    if(!(d>=1&&d<=31&&m>=1&&m<=12)) return null;
+    if(y===null){ y=y0; if(y+"-"+pad(m)+"-"+pad(d)>todayStr()) y--; }
+    const dt=new Date(y,m-1,d); if(dt.getMonth()!==m-1) return null;
+    return y+"-"+pad(m)+"-"+pad(d);
+  };
+  /* Quita la primera coincidencia válida y deja el carácter que la precedía. */
+  const grab=(re,fn,set)=>{
+    t=t.replace(re,(...a)=>{ const v=fn(a); if(!v) return a[0]; set(v); return a[1]+" "; });
+  };
+  const noDate=v=>date=v;
+  grab(new RegExp("(^|[^\\d])"+PRE+"(20\\d{2})-(\\d{1,2})-(\\d{1,2})(?!\\d)"),a=>mk(a[4],a[3],a[2]),noDate);
+  if(!date) grab(new RegExp("(^|[^\\d])"+PRE+"(\\d{1,2})\\s*(?:de\\s+)?(ene|feb|mar|abr|may|jun|jul|ago|sep|set|oct|nov|dic)[a-z]*\\.?(?:\\s*(?:de|del)?\\s*(\\d{4}))?"),a=>mk(a[2],MESES[a[3]],a[4]),noDate);
+  if(!date) grab(new RegExp("(^|[^\\d.])"+PRE+"(\\d{1,2})/(\\d{1,2})(?:/(\\d{4}|\\d{2}))?(?![\\d/])"),a=>mk(a[2],a[3],a[4]),noDate);
+  if(!date) grab(new RegExp("(^|[^\\d])"+PRE+"(\\d{1,2})-(\\d{1,2})-(\\d{4}|\\d{2})(?![\\d-])"),a=>mk(a[2],a[3],a[4]),noDate);
+  grab(new RegExp("(^|[^\\d])"+PRE+"([01]?\\d|2[0-3]):([0-5]\\d)(?::[0-5]\\d)?\\s*(a\\.?\\s?m\\.?|p\\.?\\s?m\\.?|hrs?\\.?|h)?(?![\\w])"),a=>{
+    let h=+a[2]; const ap=(a[4]||"").replace(/[^apm]/g,"");
+    if(ap==="pm"&&h<12) h+=12; if(ap==="am"&&h===12) h=0;
+    return pad(h)+":"+a[3];
+  },v=>time=v);
+  if(date&&date>todayStr()) date=null;
+  return {t,date,time};
+}
 function parseLabText(text){
   const rec={}; const unknown=[];
   if(!text||!text.trim()) return {rec,unknown};
   let t=norm(text);
+  const when=extractWhen(t); t=when.t;
+  t=t.replace(/\b(?:laboratorios?|labs?|resultados?)\b(?:\s+de\s+laboratorios?)?\s*[:\-]?/g," ");   // encabezado del párrafo
   t=t.replace(/(\d),(\d{3})(?!\d)/g,"$1$2");        // 95,000 -> 95000 antes de partir por comas
   /* Coma decimal: sólo cuando queda pegada entre dos dígitos. Como separador de lista
      siempre lleva espacio o letra después, así que "Cr 1,8, K 3,2" se lee bien.
@@ -853,7 +888,7 @@ function parseLabText(text){
     else unknown.push(chunk.trim());
   });
   if(rec.gtipo==="" ) { const anyGas=LAB_GROUPS.find(g=>g.gas).f.some(f=>f.k!=="gtipo"&&rec[f.k]); if(!anyGas) delete rec.gtipo; }
-  return {rec,unknown};
+  return {rec,unknown,when:{date:when.date,time:when.time}};
 }
 /* Reconstruye el párrafo en el formato de la nota a partir de un set guardado. */
 function labsToText(r){
@@ -1428,11 +1463,12 @@ function labsPaneHTML(p){
     const hits=LAB_FIELDS.filter(f=>d.parsed.rec[f.k]!==undefined && f.k!=="gtipo");
     preview=`<div class="pv-box">
       <div class="pv-head">${hits.length} valor${hits.length===1?"":"es"} reconocido${hits.length===1?"":"s"}${d.parsed.rec.gtipo?` · gasometría ${esc(d.parsed.rec.gtipo)}`:""}</div>
+      ${(d.parsed.when&&(d.parsed.when.date||d.parsed.when.time))?`<div class="pv-head" style="margin-top:8px;color:var(--success)">Fecha detectada: ${d.parsed.when.date?labDateLabel(p.id):"hoy"}${d.parsed.when.time?" · "+esc(d.parsed.when.time):""}</div>`:`<div class="muted-note">No se encontró fecha ni hora en el párrafo; se usará la del campo «Fecha del set».</div>`}
       ${hits.length?`<div class="pv-chips">${hits.map(f=>{ const v=d.parsed.rec[f.k], st=labStatus(f.k,v,p,d.parsed.rec), dir=st?labDir(f.k,v,p,d.parsed.rec):"";
         return `<span class="pvc ${st}"><em>${f.label}</em><span class="num ${dir}">${esc(v)}</span></span>`; }).join("")}</div>`:`<div class="muted-note">No se reconoció ningún valor. Revisa que cada dato venga como “Etiqueta valor”.</div>`}
       ${d.parsed.unknown.length?`<div class="pv-warn">Sin reconocer: ${esc(d.parsed.unknown.slice(0,12).join(" · "))}</div>
         <button class="btn ghost sm mt" onclick="unknownToOtros('${p.id}')">Guardar lo no reconocido en «Otros estudios»</button>`:""}
-      ${hits.length?`<button class="btn primary full mt" onclick="commitLabs('${p.id}')">Guardar set del <span class="js-labdate-btn">${labDateLabel(p.id)}</span></button>`:""}
+      ${hits.length?`<button class="btn primary full mt" onclick="commitLabs('${p.id}')">Guardar set del <span class="js-labdate-btn">${labDateLabel(p.id)}</span>${labTime[p.id]?" · "+labTime[p.id]:""}</button>`:""}
     </div>`;
   }
   return `<div class="sec-title">Comparativa</div>
@@ -1442,8 +1478,10 @@ function labsPaneHTML(p){
     <div class="row">
       <input type="date" id="labdate-${p.id}" value="${getLabDate(p.id)}" max="${todayStr()}" onchange="setLabDate('${p.id}',this.value)"
         style="height:40px;background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);color:var(--text);padding:0 12px;font-size:16px;font-family:inherit">
-      <button class="btn ghost sm" onclick="setLabDate('${p.id}',todayStr())">Hoy</button>
-      <span class="stamp">Aplica al pegado y a la captura manual.</span>
+      <input type="time" id="labtime-${p.id}" value="${labTime[p.id]||""}" onchange="setLabTime('${p.id}',this.value)" title="Hora de los resultados (opcional)"
+        style="height:40px;background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);color:var(--text);padding:0 12px;font-size:16px;font-family:inherit">
+      <button class="btn ghost sm" onclick="setLabDate('${p.id}',todayStr());setLabTime('${p.id}','');const t=document.getElementById('labtime-${p.id}');if(t)t.value=''">Hoy</button>
+      <span class="stamp">Si el párrafo trae fecha y hora, se llenan solas al pulsar «Acomodar».</span>
     </div>
     <div class="sec-title">Pegar laboratorios</div>
     <textarea id="paste-${p.id}" class="pres-area" style="min-height:96px" placeholder="Pega el párrafo tal cual: Glu 118, Ure 62, Bun 29, Cr 1.8, Na 138, K 3.2… Gasometría arterial: pH 7.31, pCO₂ 30, HCO₃ 15, Lactato 2.4.">${esc(d.text)}</textarea>
@@ -1461,7 +1499,7 @@ function labsTable(p){
   const recs=(p.labs||[]);
   if(!recs.length) return `<div class="muted-note">Sin laboratorios. Pega el primer set abajo.</div>`;
   const show=recs.slice(-6).reverse();
-  const header=`<th>Lab</th>`+show.map((r,i)=>`<th class="${i===0?'now':''}"><button class="thdate" onclick="editLabDate('${p.id}','${r.ts}')" title="Cambiar fecha o eliminar este set">${fmtShort(r.ts)}</button></th>`).join("");
+  const header=`<th>Lab</th>`+show.map((r,i)=>`<th class="${i===0?'now':''}"><button class="thdate" onclick="editLabDate('${p.id}','${r.ts}')" title="Cambiar fecha o eliminar este set">${fmtShort(r.ts)}${r.hasTime?`<span style="display:block;font-size:10px;font-weight:400;letter-spacing:0">${fmtHour(r.ts)}</span>`:""}</button></th>`).join("");
   let body="";
   LAB_GROUPS.forEach(g=>{
     const fields=g.f.filter(f=>!f.text && show.some(r=>r[f.k]));
@@ -1649,14 +1687,15 @@ function saveVitals(id){
 /* Fecha de un set: hoy conserva la hora real; otro día se fija a las 12:00 locales.
    Se evita repetir un ts exacto porque identifica al set al borrarlo o cambiarle la fecha. */
 function getLabDate(id){ return labDate[id]||todayStr(); }
+function setLabTime(id,v){ if(v) labTime[id]=v; else delete labTime[id]; }
 function setLabDate(id,v){
   labDate[id]=(v&&v<=todayStr())?v:todayStr();
   const el=document.getElementById("labdate-"+id); if(el&&el.value!==labDate[id]) el.value=labDate[id];
   document.querySelectorAll(".js-labdate-btn").forEach(b=>b.textContent=labDateLabel(id));
 }
 function labDateLabel(id){ const [y,m,d]=getLabDate(id).split("-"); return d+"/"+m+(y!==String(new Date().getFullYear())?"/"+y:""); }
-function labTs(p,v,list){
-  let t=(v===todayStr())?new Date():new Date(v+"T12:00:00");
+function labTs(p,v,list,time){
+  let t=time?new Date(v+"T"+time+":00"):((v===todayStr())?new Date():new Date(v+"T12:00:00"));
   if(isNaN(t)) t=new Date();
   const used=new Set((p[list||"labs"]||[]).map(r=>r.ts));
   while(used.has(t.toISOString())) t=new Date(t.getTime()+1000);
@@ -1667,8 +1706,8 @@ function saveLabs(id){
   const p=find(id); if(!p) return;
   const rec=collectFields(LAB_FIELDS.filter(f=>!f.text),"lab",id);
   if(!rec){ toast("Captura al menos un laboratorio","err"); return; }
-  rec.ts=labTs(p,getLabDate(id));
-  p.labs=p.labs||[]; p.labs.push(rec); sortLabs(p); delete labDate[id]; openPanes[id]="labs";
+  rec.ts=labTs(p,getLabDate(id),"labs",labTime[id]); rec.hasTime=!!labTime[id]||getLabDate(id)===todayStr();
+  p.labs=p.labs||[]; p.labs.push(rec); sortLabs(p); delete labDate[id]; delete labTime[id]; openPanes[id]="labs";
   if(save()) toast("Set capturado guardado","ok");
   refresh(id);
 }
@@ -1740,17 +1779,20 @@ function previewLabs(id){
   const el=document.getElementById(`paste-${id}`); if(!el) return;
   const text=el.value;
   labDraft[id]={text, parsed:parseLabText(text)};
+  const w=labDraft[id].parsed.when||{};
+  if(w.date) labDate[id]=w.date;
+  if(w.time) labTime[id]=w.time;
   openPanes[id]="labs"; refresh(id);
 }
 function clearLabDraft(id){ delete labDraft[id]; openPanes[id]="labs"; refresh(id); }
 function toggleManual(id){ manualLabs.has(id)?manualLabs.delete(id):manualLabs.add(id); openPanes[id]="labs"; refresh(id); }
 function commitLabs(id){
   const p=find(id), d=labDraft[id]; if(!p||!d||!d.parsed) return;
-  const rec=Object.assign({ts:labTs(p,getLabDate(id))}, d.parsed.rec);
+  const rec=Object.assign({ts:labTs(p,getLabDate(id),"labs",labTime[id]),hasTime:!!labTime[id]||getLabDate(id)===todayStr()}, d.parsed.rec);
   const keys=Object.keys(rec).filter(k=>k!=="ts"&&k!=="gtipo");
   if(!keys.length){ toast("No hay valores que guardar","err"); return; }
   p.labs=p.labs||[]; p.labs.push(rec); sortLabs(p);
-  delete labDraft[id]; delete labDate[id]; openPanes[id]="labs";
+  delete labDraft[id]; delete labDate[id]; delete labTime[id]; openPanes[id]="labs";
   if(save()) toast(`${keys.length} laboratorios guardados`,"ok");
   refresh(id);
 }
@@ -1760,6 +1802,7 @@ function editLabDate(id,ts){
   const p=find(id); if(!p) return;
   dateEdit={id,ts};
   const inp=document.getElementById("date-in"); inp.max=todayStr(); inp.value=dayKey(ts);
+  const r=(p.labs||[]).find(x=>x.ts===ts); document.getElementById("time-in").value=(r&&r.hasTime)?new Date(ts).toTimeString().slice(0,5):"";
   document.getElementById("date-ov").classList.add("on");
   setTimeout(()=>inp.focus(),60);
 }
@@ -1778,7 +1821,9 @@ function applyDateEdit(){
   if(!dateEdit||!v||v>todayStr()){ toast("Elige una fecha válida (no futura)","err"); return; }
   const p=find(dateEdit.id), r=p&&(p.labs||[]).find(x=>x.ts===dateEdit.ts); if(!r){ closeDateEdit(); return; }
   const id=dateEdit.id;
-  if(dayKey(r.ts)!==v){ r.ts=labTs(p,v); sortLabs(p); }
+  const tm=document.getElementById("time-in").value;
+  const cur=r.hasTime?new Date(r.ts).toTimeString().slice(0,5):"";
+  if(dayKey(r.ts)!==v||tm!==cur){ r.ts=labTs(p,v,"labs",tm||null); r.hasTime=!!tm; sortLabs(p); }
   closeDateEdit(); openPanes[id]="labs";
   if(save()) toast("Fecha actualizada","ok");
   refresh(id);

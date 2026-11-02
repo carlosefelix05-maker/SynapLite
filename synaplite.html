@@ -219,6 +219,25 @@
   .drv.warn{color:var(--warning);background:var(--warning-soft);border-color:var(--warning)} .drv.warn em{color:var(--warning)}
   .drv.bad{color:var(--danger);background:var(--danger-soft);border-color:var(--danger)}    .drv.bad em{color:var(--danger)}
 
+  .cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px}
+  .ccard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+  .cname{font-size:12px;line-height:16px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center}
+  .cval{font-size:28px;line-height:34px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+  .cval small{font-size:13px;font-weight:400;color:var(--text-muted);margin-left:6px}
+  .csub{font-size:14px;color:var(--text)}
+  .cmiss{font-size:14px;color:var(--text-muted);padding:6px 0}
+  .cform{font-size:12px;color:var(--text-muted);font-family:ui-monospace,Menlo,monospace;line-height:1.4;margin-top:4px}
+  .cins{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+  .cin{font-size:12px;background:var(--surface-sunken);border-radius:var(--radius-md);padding:2px 8px;font-variant-numeric:tabular-nums;font-weight:700;display:inline-flex;gap:5px;align-items:baseline}
+  .cin em{font-style:normal;font-weight:700;color:var(--text-muted)} .cin small{font-weight:400;color:var(--text-muted)}
+  .cwarn,.cnote{font-size:12px;margin-top:4px;color:var(--warning)} .cnote{color:var(--text-muted)}
+  .ccard.warn{border-color:var(--warning)} .ccard.warn .cval,.ccard.warn .cname{color:var(--warning)}
+  .ccard.bad{border-color:var(--danger)} .ccard.bad .cval,.ccard.bad .cname{color:var(--danger)}
+  .ccard.warn .cname::before,.ccard.bad .cname::before{content:"";display:inline-block;width:7px;height:7px;background:currentColor;margin-right:4px;flex:none}
+  .ccard.warn .cname::before{clip-path:polygon(50% 0,100% 100%,0 100%)} .ccard.bad .cname::before{border-radius:1px}
+  .cfio{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--text-muted);max-width:280px;margin-bottom:4px}
+  .cfio input{font:inherit;font-size:16px;font-weight:400;color:var(--text);background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius-md);padding:8px 10px;min-height:44px}
+  .pane-area>.pane:has(.cgrid){max-width:none}
   .labs-table tr.grp td{background:var(--surface-sunken);font-size:11px;line-height:14px;font-weight:700;color:var(--primary-strong);
     text-transform:uppercase;letter-spacing:.06em;padding:6px 12px;text-align:left}
   .labs-table tr.grp td.lname{background:var(--surface-sunken);color:var(--primary-strong)}
@@ -1343,7 +1362,7 @@ function detailHTML(p){
   const pane=openPanes[p.id]||"pres", seen=seenToday(p);
   const L=visiblePatients(), i=L.findIndex(x=>x.id===p.id);
   const sub=[p.age?esc(p.age)+" años":"",esc(p.sex||""),p.att?esc(p.att):""].filter(Boolean).join(" · ");
-  const panes={pres:presPaneHTML,sv:svPaneHTML,labs:labsPaneHTML,vma:vmaPaneHTML,inf:infPaneHTML,meds:medsPaneHTML,pend:pendPaneHTML,com:comPaneHTML,files:filesPaneHTML};
+  const panes={pres:presPaneHTML,sv:svPaneHTML,labs:labsPaneHTML,calc:calcPaneHTML,vma:vmaPaneHTML,inf:infPaneHTML,meds:medsPaneHTML,pend:pendPaneHTML,com:comPaneHTML,files:filesPaneHTML};
   return `<div class="dhead">
       <div class="dhead-top">
         <button class="fb-back" onclick="closePatient()">${ARROW_L}Censo</button>
@@ -1381,6 +1400,7 @@ function detailHTML(p){
         ${segBtn(p,'pres','Presentación','')}
         ${segBtn(p,'sv','Signos vitales','')}
         ${segBtn(p,'labs','Labs',nl?`<span class="cnt">${nl}</span>`:'')}
+        ${segBtn(p,'calc','Cálculos','')}
         ${segBtn(p,'vma','VMA',onV?`<span class="dotv"></span>`:'')}
         ${segBtn(p,'inf','Infusiones',ai?`<span class="cnt">${ai}</span>`:'')}
         ${segBtn(p,'meds','Medicamentos',am?`<span class="cnt">${am}</span>`:'')}
@@ -1407,6 +1427,157 @@ function vitalsPreview(p){
   }).join("");
   return `<div class="sv-preview">${parts}</div>`;
 }
+/* ---------------- cálculos automáticos ---------------- */
+/* Cada fórmula toma el valor MÁS RECIENTE de cada dato (laboratorios, signos vitales,
+   VMA, ficha del paciente) y avisa cuando faltan datos o vienen de días distintos. */
+const calcFio2={};
+function labLatest(p,k){
+  const L=p.labs||[];
+  for(let i=L.length-1;i>=0;i--){ const n=labNum(k,L[i][k]); if(n!==null) return {n,ts:L[i].ts,rec:L[i]}; }
+  return null;
+}
+function fio2Used(p){
+  const m=num(calcFio2[p.id]);
+  let n=m, src="manual";
+  if(n===null){ const v=lastVMA(p); if(p.onVMA && v){ n=num(v.fio2); src="VMA"; } }
+  if(n===null||n<=0) return null;
+  if(n>1) n/=100;
+  return n<=1?{n,src}:null;
+}
+function setCalcFio2(id){
+  const e=document.getElementById("calc-fio2-"+id); calcFio2[id]=e?e.value.trim():"";
+  refresh(id);
+}
+function calcCard(title,formula,ins,fn){
+  const miss=ins.filter(i=>!i.x).map(i=>i.l);
+  const res=miss.length?null:fn.apply(null,ins.map(i=>i.x.n));
+  const days={}; ins.forEach(i=>{ if(i.x&&i.x.ts) days[dayKey(i.x.ts)]=1; });
+  const mixed=Object.keys(days).length>1;
+  const chips=ins.filter(i=>i.x).map(i=>`<span class="cin"><em>${esc(i.l)}</em>${esc(i.x.d!=null?i.x.d:(Math.round(i.x.n*100)/100))}${i.x.ts?`<small>${fmtShort(i.x.ts)}</small>`:""}</span>`).join("");
+  return `<div class="ccard ${res&&res.st||""}">
+    <div class="cname">${esc(title)}</div>
+    ${res?`<div class="cval">${esc(res.v)}${res.u?`<small>${esc(res.u)}</small>`:""}</div>${res.sub?`<div class="csub">${esc(res.sub)}</div>`:""}`
+         :`<div class="cmiss">Falta: ${esc(miss.join(", "))}</div>`}
+    <div class="cform">${esc(formula)}</div>
+    ${chips?`<div class="cins">${chips}</div>`:""}
+    ${res&&mixed?`<div class="cwarn">Datos de fechas distintas: confirma que sean comparables.</div>`:""}
+    ${res&&res.note?`<div class="cnote">${esc(res.note)}</div>`:""}
+  </div>`;
+}
+function calcPaneHTML(p){
+  const age=num(p.age), sex=sexOf(p), w=pesoKg(p), dw=dosingWeight(p), fio=fio2Used(p), vit=lastVitals(p);
+  const R=(n,d)=>{ const f=Math.pow(10,d||0); return Math.round(n*f)/f; };
+  const lab=(k,l)=>({l:l||LAB_BY_KEY[k].label,x:labLatest(p,k)});
+  const pat=(n,l,d)=>({l,x:(n===null||n===undefined||isNaN(n))?null:{n,d}});
+  const edad=pat(age,"Edad",age!==null?age+" a":null), sx=pat(sex?(sex==="F"?1:0):null,"Sexo",sex==="F"?"Mujer":"Hombre");
+  const buni=(()=>{ const b=labLatest(p,"bun"); if(b) return {l:"BUN",x:b};
+    const u=labLatest(p,"urea"); return u?{l:"BUN",x:{n:u.n/2.14,ts:u.ts,d:R(u.n/2.14,1)+" (urea÷2.14)"}}:{l:"BUN",x:null}; })();
+  const hco=(()=>{ const h=labLatest(p,"hco3")||labLatest(p,"tco2"); return {l:"HCO₃",x:h}; })();
+  const fi=pat(fio?fio.n:null,"FiO₂",fio?Math.round(fio.n*100)+"% ("+fio.src+")":null);
+  let sat=null, pas=null, pad=null, fc=null;
+  if(vit){ sat=num(vit.sato2); fc=num(vit.fc); const m=String(vit.ta||"").match(/(\d{2,3})\s*\/\s*(\d{2,3})/); if(m){ pas=+m[1]; pad=+m[2]; } }
+  const vts=vit?vit.ts:null;
+  const withTs=(o)=>{ if(o.x) o.x.ts=vts; return o; };
+  const alb=labLatest(p,"alb");
+
+  const renal=[
+    calcCard("TFGe · CKD-EPI 2021","142 × min(Cr/κ,1)^α × max(Cr/κ,1)^-1.2 × 0.9938^edad (× 1.012 si mujer)",[lab("cr","Cr"),edad,sx],(cr,a,f)=>{
+      const k=f?0.7:0.9, al=f?-0.241:-0.302, r=cr/k;
+      const g=Math.round(142*Math.pow(Math.min(r,1),al)*Math.pow(Math.max(r,1),-1.2)*Math.pow(0.9938,a)*(f?1.012:1));
+      const e=g>=90?"G1":g>=60?"G2":g>=45?"G3a":g>=30?"G3b":g>=15?"G4":"G5";
+      return {v:g,u:"mL/min/1.73 m²",sub:"Estadio "+e,st:g<30?"bad":g<60?"warn":""};
+    }),
+    calcCard("Depuración · Cockcroft-Gault","(140 − edad) × peso ÷ (72 × Cr) (× 0.85 si mujer)",[lab("cr","Cr"),edad,sx,pat(dw?dw.kg:null,"Peso",dw?R(dw.kg,1)+" kg ("+dw.tipo+")":null)],(cr,a,f,kg)=>{
+      const c=Math.round((140-a)*kg/(72*cr)*(f?0.85:1));
+      return {v:c,u:"mL/min",sub:"Para ajuste de fármacos",st:c<30?"bad":c<60?"warn":""};
+    }),
+    calcCard("Relación BUN / Cr","BUN ÷ Cr (BUN = urea ÷ 2.14 si sólo hay urea)",[buni,lab("cr","Cr")],(b,cr)=>{
+      const r=R(b/cr,1);
+      return {v:r,sub:r>20?"> 20: sugiere causa prerrenal o sangrado digestivo":r<10?"< 10: considera daño intrínseco o poca ingesta proteica":"10–20: sin patrón claro",st:""};
+    }),
+  ];
+
+  const resp=[
+    calcCard("PaFi (PaO₂ / FiO₂)","PaO₂ ÷ FiO₂",[lab("po2","pO₂"),fi],(po,f)=>{
+      const g=Math.round(po/f), tipo=(labLatest(p,"po2").rec.gtipo||"").toLowerCase();
+      return {v:g,u:"mmHg",sub:g<=100?"Grave (Berlín)":g<=200?"Moderado (Berlín)":g<=300?"Leve (Berlín)":"> 300",st:g<=200?"bad":g<=300?"warn":"",
+        note:/ven/.test(tipo)?"La gasometría es venosa: la PaFi sólo aplica a sangre arterial.":""};
+    }),
+    calcCard("SpO₂ / FiO₂","SatO₂ ÷ FiO₂ (último signo vital)",[withTs({l:"SatO₂",x:sat!==null?{n:sat}:null}),fi],(s,f)=>{
+      const g=Math.round(s/f);
+      return {v:g,sub:g<=235?"≤ 235: equivale a PaFi ≈ 200":g<=315?"≤ 315: equivale a PaFi ≈ 300":"> 315",st:g<=235?"bad":g<=315?"warn":"",
+        note:s>97?"Con SatO₂ > 97 % la relación sobreestima la oxigenación.":""};
+    }),
+    calcCard("pCO₂ esperada · Winter","1.5 × HCO₃ + 8 (± 2), para acidosis metabólica",[hco],(h)=>{
+      const e=1.5*h+8, pc=labLatest(p,"pco2");
+      let sub="";
+      if(pc) sub=pc.n>e+2?`pCO₂ medida ${pc.n}: mayor, acidosis respiratoria agregada`:pc.n<e-2?`pCO₂ medida ${pc.n}: menor, alcalosis respiratoria agregada`:`pCO₂ medida ${pc.n}: compensación adecuada`;
+      return {v:R(e-2,1)+" – "+R(e+2,1),u:"mmHg",sub:sub,st:""};
+    }),
+  ];
+
+  const elec=[
+    calcCard("Brecha aniónica","Na − (Cl + HCO₃); corregida: + 2.5 × (4 − Alb)",[lab("na","Na"),lab("cl","Cl"),hco],(na,cl,h)=>{
+      const ag=R(na-cl-h,1), ac=alb?R(ag+2.5*(4-alb.n),1):null, ref=ac!==null?ac:ag;
+      return {v:ag,u:"mEq/L",sub:(ac!==null?`Corregida por Alb ${alb.n}: ${ac} · `:"")+"Normal 8–12",st:ref>20?"bad":ref>12?"warn":ref<6?"warn":""};
+    }),
+    calcCard("Delta-delta (ΔAG / ΔHCO₃)","(AG − 12) ÷ (24 − HCO₃)",[lab("na","Na"),lab("cl","Cl"),hco],(na,cl,h)=>{
+      const ag=na-cl-h;
+      if(ag<=12||h>=24) return {v:"No aplica",sub:"Requiere AG > 12 y HCO₃ < 24",st:""};
+      const d=R((ag-12)/(24-h),2);
+      return {v:d,sub:d<1?"< 1: acidosis con AG normal agregada":d<=2?"1–2: acidosis de AG elevada pura":"> 2: alcalosis metabólica agregada",st:""};
+    }),
+    calcCard("Calcio corregido por albúmina","Ca + 0.8 × (4 − Alb)",[lab("ca","Ca"),lab("alb","Alb")],(ca,al)=>{
+      const c=R(ca+0.8*(4-al),1), ci=labLatest(p,"cai");
+      return {v:c,u:"mg/dL",sub:"Normal 8.5–10.5"+(ci?" · Ca++ medido "+ci.n+" mmol/L (prevalece)":""),st:(c<7||c>12)?"bad":(c<8.5||c>10.5)?"warn":""};
+    }),
+    calcCard("Sodio corregido por glucosa","Na + 1.6 × (Glu − 100) ÷ 100 (factor 2.4 con Glu > 400)",[lab("na","Na"),lab("glu","Glu")],(na,g)=>{
+      const a=R(na+1.6*(g-100)/100,1), b=R(na+2.4*(g-100)/100,1);
+      return {v:a,u:"mEq/L",sub:"Con factor 2.4: "+b,st:(a<125||a>155)?"bad":(a<135||a>145)?"warn":"",note:g<=100?"Con glucosa ≤ 100 no hay corrección.":""};
+    }),
+    calcCard("Osmolaridad sérica calculada","2 × Na + Glu ÷ 18 + BUN ÷ 2.8",[lab("na","Na"),lab("glu","Glu"),buni],(na,g,b)=>{
+      const o=R(2*na+g/18+b/2.8,1);
+      return {v:o,u:"mOsm/kg",sub:"Normal 275–295",st:(o>320||o<260)?"bad":(o>295||o<275)?"warn":""};
+    }),
+    calcCard("Déficit de agua libre","ACT × (Na ÷ 140 − 1); ACT = peso × 0.6 H / 0.5 M (0.5 / 0.45 si ≥ 65 años)",[lab("na","Na"),pat(w,"Peso",w?w+" kg":null),sx,edad],(na,kg,f,a)=>{
+      if(na<=145) return {v:"Sin déficit",sub:"Na ≤ 145",st:""};
+      const frac=f?(a>=65?0.45:0.5):(a>=65?0.5:0.6), d=R(kg*frac*(na/140-1),1);
+      return {v:d,u:"L",sub:"Reponer en 48–72 h; no bajar el Na más de 10 mEq/L por día",st:na>155?"bad":"warn"};
+    }),
+  ];
+
+  const hep=[
+    calcCard("Índice de De Ritis (AST / ALT)","AST ÷ ALT",[lab("tgo","AST"),lab("tgp","ALT")],(a,l)=>{
+      const r=R(a/l,2);
+      return {v:r,sub:r>2?"> 2: patrón de daño por alcohol o cirrosis":r<1?"< 1: patrón hepatocelular viral o por grasa":"1–2: inespecífico",st:""};
+    }),
+    calcCard("FIB-4","edad × AST ÷ (plaquetas × √ALT)",[edad,lab("tgo","AST"),lab("tgp","ALT"),lab("plaq","Plaq")],(a,ast,alt,pl)=>{
+      const f=R(a*ast/(pl*Math.sqrt(alt)),2), lo=a>=65?2:1.3;
+      return {v:f,sub:f<lo?`< ${lo}: riesgo bajo de fibrosis avanzada`:f>2.67?"> 2.67: riesgo alto de fibrosis avanzada":`${lo}–2.67: indeterminado`,st:f>2.67?"bad":f>=lo?"warn":""};
+    }),
+  ];
+
+  const hemo=[
+    calcCard("Presión arterial media","(PAS + 2 × PAD) ÷ 3",[withTs({l:"PAS",x:pas!==null?{n:pas}:null}),withTs({l:"PAD",x:pad!==null?{n:pad}:null})],(s,d)=>{
+      const m=R((s+2*d)/3,0);
+      return {v:m,u:"mmHg",sub:"Meta ≥ 65",st:m<55?"bad":m<65?"warn":""};
+    }),
+    calcCard("Índice de choque","FC ÷ PAS",[withTs({l:"FC",x:fc!==null?{n:fc}:null}),withTs({l:"PAS",x:pas!==null?{n:pas}:null})],(f,s)=>{
+      const i=R(f/s,2);
+      return {v:i,sub:"Normal 0.5–0.7",st:i>=1?"bad":i>=0.9?"warn":""};
+    }),
+  ];
+
+  const sec=(t,cards)=>`<div class="sec-title">${t}</div><div class="cgrid">${cards.join("")}</div>`;
+  const soma=somaList(p);
+  return `<div class="muted-note" style="margin-top:8px">Se calcula solo con el valor más reciente de cada dato. Edad, sexo, peso y talla salen de «Editar datos»; si falta uno, la tarjeta te dice cuál.</div>
+    ${soma.length?`<div class="sec-title">Somatometría</div>${drvRow(soma)}`:""}
+    <div class="sec-title">Dato manual</div>
+    <label class="cfio">FiO₂ (%) para PaFi y SpO₂/FiO₂
+      <input id="calc-fio2-${p.id}" inputmode="decimal" placeholder="${fio?Math.round(fio.n*100)+" (de "+fio.src+")":"21 aire ambiente"}" value="${esc(calcFio2[p.id]||"")}" onchange="setCalcFio2('${p.id}')"></label>
+    ${sec("Función renal",renal)}${sec("Gasometría y oxigenación",resp)}${sec("Electrolitos y metabolismo",elec)}${sec("Hígado",hep)}${sec("Hemodinamia",hemo)}`;
+}
+
 /* ---------------- paneles ---------------- */
 function presPaneHTML(p){
   const txt=p.presentation||"";

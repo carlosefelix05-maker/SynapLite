@@ -428,8 +428,8 @@
   .seg button .dotv{width:7px;height:7px;border-radius:50%;background:var(--tertiary-strong)}
   .pane-area{flex:1;min-height:0;overflow-y:auto;padding:4px 24px 32px}
   .pane-area>.pane{display:block;max-width:1040px;padding-top:0}
-  .cols2{display:grid;grid-template-columns:1fr;gap:0 24px}
-  @media(min-width:1180px){ .cols2{grid-template-columns:1fr 1fr} }
+  .pane-area>.pane:has(.cols2){max-width:none}
+  .pres-area{min-height:180px}
   .main-empty{margin:auto;text-align:center;color:var(--text-muted);padding:40px 24px;max-width:380px}
   .main-empty .big{display:inline-grid;place-items:center;width:56px;height:56px;border-radius:var(--radius-lg);margin-bottom:14px;background:var(--primary-soft);color:var(--primary-strong)}
   .main-empty .big svg{width:28px;height:28px}
@@ -1413,10 +1413,11 @@ function presPaneHTML(p){
   const soma=somaList(p);
   return `<div class="sec-title">Somatometría</div>
     ${soma.length?drvRow(soma):`<div class="muted-note">Sin peso ni talla. Agrégalos en “Editar datos” y la app calcula peso predicho, Vt/kg, diuresis en mL/kg/h y depuración.</div>`}
-    <div class="sec-title">Presentación del paciente · editar</div>
+    <div class="sec-title">Presentación del paciente</div>
     <div class="cols2"><div>
     ${txt?`<div class="pres-read">${esc(txt)}</div>`:`<div class="muted-note">Sin presentación todavía. Escríbela a la derecha.</div>`}
     </div><div>
+    <div class="sec-title">Editar</div>
     <textarea id="pres-${p.id}" class="pres-area" placeholder="Resumen del paciente: motivo de ingreso, antecedentes, resumen clínico, evolución…">${esc(txt)}</textarea>
     <button class="btn primary full mt" onclick="savePres('${p.id}')">Guardar presentación</button>
     </div></div>`;

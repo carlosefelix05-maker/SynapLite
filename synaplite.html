@@ -734,6 +734,7 @@ const LAB_GROUPS=[
     {k:"beb",label:"BEb",ph:"",a:["beb","be b","ebb","be"]},
     {k:"so2",label:"SO₂",ph:"%",a:["so2","sato2","sat o2","saturacion"]},
     {k:"lactato",label:"Lactato",ph:"mmol/L",a:["lactato","lac","lactate"]},
+    {k:"cai",label:"Ca++",ph:"mmol/L",a:["ca++","ca ++","ca+ +","ca2+","ca 2+","cai","ca i","calcio ionico","calcio ionizado","ca ionico","ca ionizado"]},
   ]},
 ];
 const LAB_FIELDS=LAB_GROUPS.reduce((a,g)=>a.concat(g.f),[]);
@@ -878,7 +879,7 @@ function parseLabText(text){
   t=t.replace(PAIR_SPLIT_RE,"$1$2, ");               // ya sin unidades, lo que sigue es otra etiqueta
   t.split(",").forEach(chunk=>{
     const c=chunk.trim(); if(!c) return;
-    const m=/^([a-z0-9¿?\/\s\.\-]*?)\s*[:=]?\s*([<>]?\s*-?\d+(?:[.,]\d+)?)\s*$/.exec(c);
+    const m=/^([a-z0-9¿?\/\s\.\-+]*?)\s*[:=]?\s*([<>]?\s*-?\d+(?:[.,]\d+)?)\s*$/.exec(c);
     if(!m){ if(/[a-z]/.test(c) && c.length<40) unknown.push(chunk.trim()); return; }
     const label=m[1].replace(/\s+/g," ").trim();
     const value=cleanNum(m[2]);
@@ -1090,7 +1091,8 @@ const LAB_REF={
   ph:{lo:7.35,hi:7.45,blo:7.20,bhi:7.55}, pco2:{lo:35,hi:45,blo:20,bhi:70}, po2:{lo:80,blo:60},
   hco3:{lo:22,hi:26,blo:15,bhi:40}, hco3std:{lo:22,hi:26,blo:15,bhi:40}, tco2:{lo:23,hi:29,blo:15,bhi:40},
   beecf:{lo:-2,hi:2,blo:-10,bhi:10}, beb:{lo:-2,hi:2,blo:-10,bhi:10},
-  so2:{lo:94,blo:90}, lactato:{hi:2.0,bhi:4.0},       // ≥ 4: Surviving Sepsis
+  so2:{lo:94,blo:90}, lactato:{hi:2.0,bhi:4.0},
+  cai:{lo:1.12,hi:1.32,blo:0.9,bhi:1.6},              // Ca++ en mmol/L; < 0.9 hipocalcemia iónica grave       // ≥ 4: Surviving Sepsis
 };
 /* En gasometría venosa el pH baja y la pCO₂ sube; pO₂ y SO₂ venosas no se califican. */
 const LAB_REF_VEN={ ph:{lo:7.31,hi:7.41,blo:7.20,bhi:7.55}, pco2:{lo:41,hi:51,blo:20,bhi:75}, po2:null, so2:null };

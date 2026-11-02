@@ -1262,6 +1262,7 @@ function rowHTML(p){
       ${p.dx?`<div class="pt-dx">${esc(p.dx)}</div>`:""}
       <div class="chips">
         ${critChip(p)}
+        ${otrosPend(p)?`<span class="chip pend">${otrosPend(p)} por reportar</span>`:""}
         ${p.alta?`<span class="chip file">Alta ${fmtShort(p.alta)}</span>`:""}
         ${!p.alta&&seen&&p.seenAt?`<span class="seen-tag">Visto ${fmtHour(p.seenAt)}</span>`:""}
         ${onV?`<span class="chip vma">● VMA</span>`:""}
@@ -1331,6 +1332,7 @@ function detailHTML(p){
       ${p.alta?"":vitalsPreview(p)}
       <div class="chips">
         ${critChip(p)}
+        ${otrosPend(p)?`<span class="chip pend">${otrosPend(p)} estudio${otrosPend(p)>1?"s":""} por reportar</span>`:""}
         ${onV?`<span class="chip vma">● VMA</span>`:""}
         ${ai?`<span class="chip inf">${ai} ${ai>1?"infusiones":"infusión"}</span>`:""}
         ${am?`<span class="chip med">${am} ${am>1?"medicamentos":"medicamento"}</span>`:""}
@@ -1427,12 +1429,14 @@ function labsPaneHTML(p){
       <div class="pv-head">${hits.length} valor${hits.length===1?"":"es"} reconocido${hits.length===1?"":"s"}${d.parsed.rec.gtipo?` · gasometría ${esc(d.parsed.rec.gtipo)}`:""}</div>
       ${hits.length?`<div class="pv-chips">${hits.map(f=>{ const v=d.parsed.rec[f.k], st=labStatus(f.k,v,p,d.parsed.rec), dir=st?labDir(f.k,v,p,d.parsed.rec):"";
         return `<span class="pvc ${st}"><em>${f.label}</em><span class="num ${dir}">${esc(v)}</span></span>`; }).join("")}</div>`:`<div class="muted-note">No se reconoció ningún valor. Revisa que cada dato venga como “Etiqueta valor”.</div>`}
-      ${d.parsed.unknown.length?`<div class="pv-warn">Sin reconocer: ${esc(d.parsed.unknown.slice(0,12).join(" · "))}</div>`:""}
+      ${d.parsed.unknown.length?`<div class="pv-warn">Sin reconocer: ${esc(d.parsed.unknown.slice(0,12).join(" · "))}</div>
+        <button class="btn ghost sm mt" onclick="unknownToOtros('${p.id}')">Guardar lo no reconocido en «Otros estudios»</button>`:""}
       ${hits.length?`<button class="btn primary full mt" onclick="commitLabs('${p.id}')">Guardar set del <span class="js-labdate-btn">${labDateLabel(p.id)}</span></button>`:""}
     </div>`;
   }
   return `<div class="sec-title">Comparativa</div>
     ${labsTable(p)}
+    ${otrosHTML(p)}
     <div class="sec-title">Fecha del set</div>
     <div class="row">
       <input type="date" id="labdate-${p.id}" value="${getLabDate(p.id)}" max="${todayStr()}" onchange="setLabDate('${p.id}',this.value)"
@@ -1650,10 +1654,10 @@ function setLabDate(id,v){
   document.querySelectorAll(".js-labdate-btn").forEach(b=>b.textContent=labDateLabel(id));
 }
 function labDateLabel(id){ const [y,m,d]=getLabDate(id).split("-"); return d+"/"+m+(y!==String(new Date().getFullYear())?"/"+y:""); }
-function labTs(p,v){
+function labTs(p,v,list){
   let t=(v===todayStr())?new Date():new Date(v+"T12:00:00");
   if(isNaN(t)) t=new Date();
-  const used=new Set((p.labs||[]).map(r=>r.ts));
+  const used=new Set((p[list||"labs"]||[]).map(r=>r.ts));
   while(used.has(t.toISOString())) t=new Date(t.getTime()+1000);
   return t.toISOString();
 }
@@ -1665,6 +1669,70 @@ function saveLabs(id){
   rec.ts=labTs(p,getLabDate(id));
   p.labs=p.labs||[]; p.labs.push(rec); sortLabs(p); delete labDate[id]; openPanes[id]="labs";
   if(save()) toast("Set capturado guardado","ok");
+  refresh(id);
+}
+/* ---------------- otros estudios: cultivos y lo que no está en la tabla ---------------- */
+const OTROS_SUGERIDOS=["Hemocultivo","Hemocultivo periférico","Hemocultivo de catéter","Urocultivo","Cultivo de secreción bronquial","Cultivo de punta de catéter","Cultivo de herida","Cultivo de LCR","Cultivo de líquido peritoneal","Cultivo de líquido pleural","Coprocultivo","Panel viral respiratorio","PCR SARS-CoV-2 / influenza","Examen general de orina","Citoquímico de LCR","Citoquímico de líquido pleural","Troponina","CPK / CK-MB","BNP / NT-proBNP","Amilasa","Lipasa","TSH / perfil tiroideo","Hemoglobina glucosilada","Ferritina / perfil de hierro","Galactomanano","VIH","Panel de hepatitis","Cortisol"];
+const otroEdit={};            // id del estudio en edición, por paciente
+function otrosPend(p){ return (p.otros||[]).filter(o=>!o.result).length; }
+function otroLine(o){ return `${o.name} (${fmtShort(o.ts)}): ${o.result?o.result+(o.abn?" [anormal]":""):"pendiente"}`; }
+function otrosText(p){ return (p.otros||[]).slice().sort((a,b)=>a.ts<b.ts?-1:1).map(otroLine).join("; "); }
+function otrosHTML(p){
+  const list=(p.otros||[]).slice().sort((a,b)=>(a.result?1:0)-(b.result?1:0)||(a.ts<b.ts?1:-1));
+  const ed=otroEdit[p.id]&&list.find(o=>o.id===otroEdit[p.id]);
+  const enter=`onkeydown="if(event.key==='Enter')saveOtro('${p.id}')"`;
+  const rows=list.length?`<div class="items">`+list.map(o=>`<div class="item">
+      <div class="it"><b>${esc(o.name)}</b> <span class="stamp">${fmtShort(o.ts)}</span>
+        <span class="dose" style="${o.abn?'color:var(--warning);font-weight:700':''}">${o.result?esc(o.result)+(o.abn?" · anormal":""):"Pendiente de resultado"}</span></div>
+      <button class="btn ghost sm" onclick="editOtro('${p.id}','${o.id}')">${o.result?"Editar":"Poner resultado"}</button>
+      <button class="del" onclick="delOtro('${p.id}','${o.id}')" title="Eliminar">×</button>
+    </div>`).join("")+`</div>`:`<div class="muted-note">Sin estudios extra. Registra hemocultivos, urocultivos, troponina o lo que no esté en la tabla.</div>`;
+  return `<div class="sec-title">Otros estudios y cultivos ${otrosPend(p)?`<span class="stamp">${otrosPend(p)} por reportar</span>`:""}</div>
+    ${rows}
+    <div class="med-add">
+      <input id="on-${p.id}" class="wide" list="otros-dl" placeholder="Estudio (Hemocultivo, Urocultivo, Troponina…)" autocomplete="off" value="${ed?esc(ed.name):""}" ${enter}>
+      <input id="or-${p.id}" class="wide" placeholder="Resultado (vacío = pendiente): S. aureus, negativo, 0.04 ng/mL…" autocomplete="off" value="${ed?esc(ed.result||""):""}" ${enter}>
+      <input id="od-${p.id}" type="date" max="${todayStr()}" value="${ed?dayKey(ed.ts):todayStr()}" title="Fecha de toma">
+      <label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;color:var(--text)">
+        <input id="oa-${p.id}" type="checkbox" style="width:auto;height:auto" ${ed&&ed.abn?"checked":""}> Anormal / positivo</label>
+      <button class="btn primary" onclick="saveOtro('${p.id}')">${ed?"Guardar cambios":"Agregar estudio"}</button>
+      ${ed?`<button class="btn ghost" onclick="cancelOtro('${p.id}')">Cancelar edición</button>`:""}
+    </div>
+    <datalist id="otros-dl">${OTROS_SUGERIDOS.map(n=>`<option value="${esc(n)}">`).join("")}</datalist>`;
+}
+function saveOtro(id){
+  const p=find(id); if(!p) return;
+  const g=k=>{ const e=document.getElementById(`${k}-${id}`); return e?e.value.trim():""; };
+  const name=g("on"), result=g("or"), day=g("od")||todayStr(), abn=!!(document.getElementById(`oa-${id}`)||{}).checked;
+  if(!name){ const e=document.getElementById(`on-${id}`); if(e) e.focus(); toast("Escribe el nombre del estudio","err"); return; }
+  if(day>todayStr()){ toast("La fecha no puede ser futura","err"); return; }
+  p.otros=p.otros||[];
+  const cur=otroEdit[id]&&p.otros.find(o=>o.id===otroEdit[id]);
+  if(cur){ cur.name=name; cur.result=result; cur.abn=abn&&!!result; if(dayKey(cur.ts)!==day) cur.ts=labTs(p,day,"otros"); }
+  else p.otros.push({id:uid(),ts:labTs(p,day,"otros"),name,result,abn:abn&&!!result});
+  delete otroEdit[id]; openPanes[id]="labs";
+  if(save()) toast(cur?"Estudio actualizado":"Estudio agregado","ok");
+  refresh(id);
+}
+function editOtro(pid,oid){ otroEdit[pid]=oid; openPanes[pid]="labs"; refresh(pid); const e=document.getElementById(`or-${pid}`); if(e){ e.focus(); e.scrollIntoView({block:"center"}); } }
+function cancelOtro(pid){ delete otroEdit[pid]; refresh(pid); }
+function delOtro(pid,oid){
+  const p=find(pid); if(!p) return;
+  p.otros=(p.otros||[]).filter(o=>o.id!==oid); if(otroEdit[pid]===oid) delete otroEdit[pid];
+  openPanes[pid]="labs"; save(); refresh(pid);
+}
+/* Lo que el pegado no reconoció ("troponina 0.04", "hemocultivo pendiente") pasa a otros estudios. */
+function unknownToOtros(id){
+  const p=find(id), d=labDraft[id]; if(!p||!d||!d.parsed||!d.parsed.unknown.length) return;
+  const cap=t=>t.charAt(0).toUpperCase()+t.slice(1);
+  p.otros=p.otros||[];
+  d.parsed.unknown.forEach(u=>{
+    const m=/^(.*?)\s*[:=]?\s*([<>]?\s*-?\d+(?:[.,]\d+)?)$/.exec(u.trim());
+    const name=cap((m&&m[1]?m[1]:u).trim()), result=m&&m[1]?m[2].replace(/\s+/g,""):"";
+    if(name) p.otros.push({id:uid(),ts:labTs(p,getLabDate(id),"otros"),name,result,abn:false});
+  });
+  const n=d.parsed.unknown.length; d.parsed.unknown=[];
+  openPanes[id]="labs"; if(save()) toast(`${n} estudio${n>1?"s":""} guardado${n>1?"s":""} en Otros estudios`,"ok");
   refresh(id);
 }
 function previewLabs(id){
@@ -1795,6 +1863,7 @@ function copySummary(id){
   if(v) L.push(`\nSV (${fmtTime(v.ts)}): `+SV_FIELDS.filter(f=>v[f.k]).map(f=>`${f.label} ${v[f.k]}`).join(", "));
   const lab=(p.labs||[]).slice(-1)[0];
   if(lab) L.push(`Labs (${fmtShort(lab.ts)}): `+labsToText(lab));
+  if((p.otros||[]).length) L.push(`Otros estudios: `+otrosText(p));
   const vm=lastVMA(p);
   if(p.onVMA&&vm) L.push(`VMA: `+VMA_FIELDS.filter(f=>vm[f.k]).map(f=>`${f.label} ${vm[f.k]}`).join(", "));
   const inf=activeInf(p);

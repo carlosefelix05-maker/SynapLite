@@ -317,6 +317,20 @@
   .bk-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--border);font-size:15px}
   .bk-row span{color:var(--text-muted)} .bk-row input{font:inherit;background:var(--surface);color:var(--text);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);padding:6px 10px}
   .hbtn.on .bkdot{background:var(--success)} .bkdot{width:8px;height:8px;border-radius:50%;background:var(--text-on-deep-muted);flex:none}
+  .lock{position:fixed;inset:0;z-index:200;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:16px}
+  .lock[hidden]{display:none}
+  .lock-card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-xl);padding:28px;box-shadow:var(--shadow-lg);text-align:center}
+  .lock-card h2{margin:0 0 6px;font-family:var(--font-serif);font-size:26px}
+  .lock-card p{margin:0 0 16px;color:var(--text-muted);font-size:15px}
+  .lock-card input{width:100%;font:inherit;font-size:18px;color:var(--text);background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);padding:10px 12px;min-height:48px;text-align:center}
+  #lock-err{min-height:22px;margin:8px 0;color:var(--danger);font-size:14px;font-weight:700}
+  body.locked .appbar,body.locked .shell,body.locked #storagebar,body.locked #bkbar{display:none}
+  .sheet input,.sheet select{width:100%;font:inherit;font-size:16px;color:var(--text);background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);padding:8px 10px;min-height:44px}
+  .sheet input[type=checkbox]{width:auto;min-height:0}
+  .reccode-box{background:var(--warning-soft);border:1.5px solid var(--warning);border-radius:var(--radius-md);padding:12px;margin-bottom:12px}
+  .reccode{font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:700;letter-spacing:.06em;margin:8px 0;word-break:break-all;user-select:all}
+  .trcode{font-family:ui-monospace,Menlo,monospace;font-size:28px;font-weight:700;letter-spacing:.08em;text-align:center;margin:12px 0;user-select:all}
+  .hbtn.on .secdot{background:var(--success)} .secdot{width:8px;height:8px;border-radius:50%;background:var(--text-on-deep-muted);flex:none}
   .add-row{display:flex;gap:8px;margin-top:10px}
   .add-row input{flex:1;background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);color:var(--text);
     height:40px;padding:0 12px;font-size:16px;min-width:0}
@@ -547,6 +561,8 @@
           </div>
         </div>
         <div class="head-actions">
+          <button class="hbtn" id="secBtn" onclick="secOpen()" title="Seguridad: cifrado y bloqueo" aria-label="Seguridad"><span class="secdot"></span><span class="lbl">Seguridad</span></button>
+          <button class="hbtn" onclick="logOpen()" title="Bitácora de cambios y deshacer" aria-label="Bitácora"><span class="lbl">Bitácora</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button>
           <button class="hbtn" id="bkBtn" onclick="bkOpen()" title="Respaldo automático diario" aria-label="Respaldo automático"><span class="bkdot"></span><span class="lbl">Respaldo</span></button>
           <button class="hbtn" onclick="exportData()" title="Exportar copia de seguridad" aria-label="Exportar copia">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 20h16"/></svg><span class="lbl">Exportar</span>
@@ -649,6 +665,55 @@
   </div>
 </div>
 
+<div class="lock" id="lock" hidden>
+  <div class="lock-card">
+    <h2>SynapLite</h2>
+    <p>Datos cifrados. Escribe tu contraseña o tu clave de recuperación.</p>
+    <input id="lock-pw" type="password" autocomplete="current-password" placeholder="Contraseña" onkeydown="if(event.key==='Enter')unlock()">
+    <div id="lock-err" aria-live="polite"></div>
+    <button class="btn primary full" id="lock-btn" onclick="unlock()">Desbloquear</button>
+  </div>
+</div>
+
+<div class="overlay" id="sec-ov">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sec-title" style="max-width:460px">
+    <h3 id="sec-title">Seguridad de los datos</h3>
+    <div id="sec-body"></div>
+    <div class="mt" style="text-align:center"><button class="link" onclick="secClose()">Cerrar</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="pw-ov" style="z-index:70">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="pw-title" style="max-width:400px">
+    <h3 id="pw-title">Contraseña</h3>
+    <p class="confirm-msg" id="pw-msg"></p>
+    <label for="pw-in" id="pw-label">Contraseña</label>
+    <input id="pw-in" type="password" autocomplete="off" onkeydown="if(event.key==='Enter')pwOk()">
+    <div id="pw-err" style="color:var(--danger);font-size:14px;font-weight:700;min-height:20px;margin-top:6px"></div>
+    <div class="menu" style="margin-top:10px"><button class="btn ghost" style="flex:1" onclick="pwClose()">Cancelar</button><button class="btn primary" style="flex:1.2" id="pw-ok" onclick="pwOk()">Aceptar</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="tr-ov">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="tr-title" style="max-width:440px">
+    <h3 id="tr-title">Transferir a otro dispositivo</h3>
+    <p class="confirm-msg">Crea un archivo cifrado con todos los pacientes. Pásalo por AirDrop, Archivos o correo; sin el código no se puede abrir.</p>
+    <div class="trcode" id="tr-code"></div>
+    <div class="muted-note">Anota este código: lo pedirá el otro dispositivo. Es de un solo uso y cambia cada vez que abres esta ventana.</div>
+    <div class="menu"><button class="btn primary" style="flex:1" onclick="trCreate()">Crear archivo cifrado</button></div>
+    <div class="muted-note" style="margin-top:12px"><b>En el otro dispositivo:</b> abre SynapLite → <b>Importar</b> → elige el archivo → escribe el código. Reemplaza los datos de ese dispositivo.</div>
+    <div class="mt" style="text-align:center"><button class="link" onclick="trClose()">Cerrar</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="log-ov">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="log-title" style="max-width:560px">
+    <h3 id="log-title">Bitácora de cambios</h3>
+    <div id="log-body"></div>
+    <div class="mt" style="text-align:center"><button class="link" onclick="logClose()">Cerrar</button></div>
+  </div>
+</div>
+
 <div class="overlay" id="bk-ov">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="bk-title" style="max-width:460px">
     <h3 id="bk-title">Respaldo automático diario</h3>
@@ -679,7 +744,7 @@
 
 <script>
 "use strict";
-const KEY="synapmed_pase_v1";
+const KEY="synapmed_pase_v1", KEY_ENC="synaplite_enc_v1", KEY_SEC="synaplite_sec_v1";
 const THEME_KEY="synapmed_theme";
 /* Íconos de línea del sistema Edu (24×24, trazo 1.75, sin relleno). Trazos copiados
    del set oficial: no dibujar otros a mano. Nunca emojis. */
@@ -828,7 +893,7 @@ const LAB_ALIASES=(()=>{
   return out.sort((x,y)=>y.al.length-x.al.length);
 })();
 
-let state = load();
+let state = secOn()?{patients:[]}:load();
 let filter = "todos";
 let query = "";
 let queryRaw = "";
@@ -851,6 +916,8 @@ function storageOK(){
 let unsaved=false;        // hubo un guardado fallido: lo capturado sólo vive en memoria
 let storageBroken=false;  // el navegador no deja guardar aquí; se detecta al arrancar
 function save(){
+  noteChange();
+  if(secOn()){ if(locked||!SEC) return false; flushEnc(); return true; }
   try{
     const json=JSON.stringify(state);
     localStorage.setItem(KEY, json);
@@ -1304,6 +1371,7 @@ function critChip(p){
 /* ---------------- render principal (layout web app) ---------------- */
 const isDesktop=()=>window.matchMedia("(min-width:900px)").matches;
 function render(){
+  if(locked) return;
   if(!selectedId && isDesktop()){
     const it=visiblePatients();
     if(it.length) selectedId=(it.find(p=>!seenToday(p))||it[0]).id;
@@ -2901,6 +2969,289 @@ function askConfirm(title,msg,okLabel,cb){
 function closeConfirm(){ document.getElementById("confirm-ov").classList.remove("on"); confirmCb=null; }
 
 /* ---------------- respaldo ---------------- */
+/* ---------------- cifrado, bloqueo, transferencia y bitácora ---------------- */
+/* Con el cifrado activo, los datos viven en localStorage como AES-GCM 256. La llave de datos (DEK)
+   es aleatoria y se guarda envuelta dos veces: con la contraseña y con una clave de recuperación.
+   Los respaldos y las copias exportadas llevan esas mismas envolturas: se abren con la contraseña
+   que había al hacerlos, o con la clave de recuperación. */
+const KDF_ITER=250000;
+const _te=new TextEncoder(), _td=new TextDecoder();
+function b64e(u8){ let s=""; for(let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000)); return btoa(s); }
+function b64d(s){ const b=atob(s), u=new Uint8Array(b.length); for(let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u; }
+const rnd=n=>crypto.getRandomValues(new Uint8Array(n));
+async function kdf(secret,salt,iter){
+  const km=await crypto.subtle.importKey("raw",_te.encode(secret),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:iter,hash:"SHA-256"},km,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+}
+async function aesEnc(key,u8){ const iv=rnd(12); return {iv:b64e(iv),ct:b64e(new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv},key,u8)))}; }
+async function aesDec(key,o){ return new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM",iv:b64d(o.iv)},key,b64d(o.ct))); }
+async function wrapDEK(raw,secret,iter){ const salt=rnd(16), k=await kdf(secret,salt,iter); return Object.assign({salt:b64e(salt)},await aesEnc(k,raw)); }
+async function unwrapDEK(w,secret,iter){ return aesDec(await kdf(secret,b64d(w.salt),iter),w); }
+const normRec=s=>String(s||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+/* Prueba la contraseña tal cual y, si no, como clave de recuperación. */
+async function unwrapAny(wraps,iter,secret){
+  try{ return await unwrapDEK(wraps.pin,secret,iter); }catch(e){}
+  return unwrapDEK(wraps.rec,normRec(secret),iter);
+}
+const dekKey=(raw,use)=>crypto.subtle.importKey("raw",raw,"AES-GCM",false,use||["encrypt","decrypt"]);
+function genRecovery(){ const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789", r=rnd(20); let s=""; for(let i=0;i<20;i++){ s+=A[r[i]%A.length]; if(i%4===3&&i<19) s+="-"; } return s; }
+function genTransferCode(){ const r=rnd(12); let s=""; for(let i=0;i<12;i++){ s+=r[i]%10; if(i%4===3&&i<11) s+="-"; } return s; }
+
+/* --- estado de seguridad --- */
+function secCfg(){ try{ return JSON.parse(localStorage.getItem(KEY_SEC)); }catch(e){ return null; } }
+function secOn(){ return !!secCfg(); }
+let SEC=null;                  // {raw,dek,cfg} mientras está desbloqueado
+let locked=false, encBusy=false, encDirty=false, secRecShow=null, lastAct=Date.now();
+async function persistEnc(){
+  const json=JSON.stringify(state), o=await aesEnc(SEC.dek,_te.encode(json));
+  localStorage.setItem(KEY_ENC,JSON.stringify(o)); return json.length;
+}
+async function flushEnc(){
+  if(encBusy){ encDirty=true; return; }
+  encBusy=true;
+  try{ do{ encDirty=false; const n=await persistEnc(); unsaved=false; paintStorageBar(n); }while(encDirty); }
+  catch(e){ unsaved=true; paintStorageBar(); toast("No se pudo guardar los datos cifrados. Exporta una copia.","err",6000); }
+  finally{ encBusy=false; }
+}
+async function encSettled(){ while(encBusy) await new Promise(r=>setTimeout(r,20)); }
+async function encPackage(){
+  const o=await aesEnc(SEC.dek,_te.encode(JSON.stringify(state)));
+  return {format:"synaplite-enc",v:1,iter:SEC.cfg.iter,wraps:SEC.cfg.wraps,iv:o.iv,ct:o.ct,exportedAt:new Date().toISOString()};
+}
+async function openEncPackage(pkg,secret){
+  const raw=await unwrapAny(pkg.wraps,pkg.iter,secret);
+  return JSON.parse(_td.decode(await aesDec(await dekKey(raw,["decrypt"]),pkg)));
+}
+async function transferPackage(code){
+  const salt=rnd(16), k=await kdf(normRec(code),salt,KDF_ITER), o=await aesEnc(k,_te.encode(JSON.stringify(state)));
+  return {format:"synaplite-transfer",v:1,iter:KDF_ITER,salt:b64e(salt),iv:o.iv,ct:o.ct,createdAt:new Date().toISOString()};
+}
+async function openTransfer(pkg,code){
+  const k=await kdf(normRec(code),b64d(pkg.salt),pkg.iter);
+  return JSON.parse(_td.decode(await aesDec(k,pkg)));
+}
+/* --- activar / cambiar / desactivar --- */
+async function secEnable(pass,autolock){
+  const raw=rnd(32), rec=genRecovery();
+  const wraps={pin:await wrapDEK(raw,pass,KDF_ITER),rec:await wrapDEK(raw,normRec(rec),KDF_ITER)};
+  const cfg={v:1,iter:KDF_ITER,wraps,autolock:autolock||0};
+  SEC={raw,dek:await dekKey(raw),cfg};
+  await persistEnc();
+  const back=JSON.parse(_td.decode(await aesDec(SEC.dek,JSON.parse(localStorage.getItem(KEY_ENC)))));   // comprobar antes de borrar el texto plano
+  if(!Array.isArray(back.patients)) throw new Error("verificación fallida");
+  localStorage.setItem(KEY_SEC,JSON.stringify(cfg)); localStorage.removeItem(KEY);
+  return rec;
+}
+async function secChangePass(oldp,newp){
+  const cfg=secCfg(); await unwrapDEK(cfg.wraps.pin,oldp,cfg.iter);        // lanza si la actual es incorrecta
+  cfg.wraps.pin=await wrapDEK(SEC.raw,newp,cfg.iter); SEC.cfg=cfg; localStorage.setItem(KEY_SEC,JSON.stringify(cfg));
+}
+async function secNewRecovery(){
+  const rec=genRecovery(), cfg=secCfg(); cfg.wraps.rec=await wrapDEK(SEC.raw,normRec(rec),cfg.iter); SEC.cfg=cfg; localStorage.setItem(KEY_SEC,JSON.stringify(cfg)); return rec;
+}
+async function secDisable(pass){
+  const cfg=secCfg(); await unwrapDEK(cfg.wraps.pin,pass,cfg.iter);
+  localStorage.setItem(KEY,JSON.stringify(state)); localStorage.removeItem(KEY_ENC); localStorage.removeItem(KEY_SEC); SEC=null;
+}
+/* --- pantalla de bloqueo --- */
+let lockFails=0;
+function showLock(msg){
+  document.body.classList.add("locked");
+  ["list","main"].forEach(i=>{ const e=document.getElementById(i); if(e) e.innerHTML=""; });
+  document.getElementById("lock").hidden=false;
+  const e=document.getElementById("lock-err"); if(e) e.textContent=msg||"";
+  setTimeout(()=>{ const i=document.getElementById("lock-pw"); if(i){ i.value=""; i.focus(); } },50);
+}
+async function unlock(){
+  const inp=document.getElementById("lock-pw"), btn=document.getElementById("lock-btn"), err=document.getElementById("lock-err");
+  const pass=inp.value; if(!pass) return;
+  btn.disabled=true; err.textContent="Verificando…";
+  try{
+    const cfg=secCfg(), raw=await unwrapAny(cfg.wraps,cfg.iter,pass), dek=await dekKey(raw);
+    const st=JSON.parse(_td.decode(await aesDec(dek,JSON.parse(localStorage.getItem(KEY_ENC)))));
+    SEC={raw,dek,cfg}; state=st; locked=false; lockFails=0; baseline();
+    document.getElementById("lock").hidden=true; document.body.classList.remove("locked"); inp.value=""; err.textContent="";
+    lastAct=Date.now(); render(); bkPaint(); secPaintBtn();
+    btn.disabled=false;
+  }catch(e){
+    lockFails++; err.textContent="Contraseña o clave incorrecta."+(lockFails>2?" Espera unos segundos…":"");
+    setTimeout(()=>{ btn.disabled=false; },Math.min(8000,400*lockFails*lockFails));
+  }
+}
+async function lockNow(){
+  if(!secOn()||locked) return;
+  await encSettled();
+  SEC=null; state={patients:[]}; selectedId=null; locked=true; undoStack.length=0; prevJSON=null;
+  closeAllSheets(); showLock("");
+}
+function closeAllSheets(){ document.querySelectorAll(".overlay.on").forEach(o=>o.classList.remove("on")); }
+function touchAct(){ lastAct=Date.now(); }
+function autoLockCheck(){
+  const c=SEC&&SEC.cfg; if(!c||locked||!c.autolock) return;
+  if(Date.now()-lastAct>c.autolock*60000) lockNow();
+}
+/* --- hoja de seguridad --- */
+function secPaintBtn(){ const b=document.getElementById("secBtn"); if(b) b.classList.toggle("on",secOn()); }
+function secOpen(){ secPaintSheet(); document.getElementById("sec-ov").classList.add("on"); }
+function secClose(){ secRecShow=null; document.getElementById("sec-ov").classList.remove("on"); }
+function alOpts(v){ return [[0,"Nunca"],[2,"2 minutos"],[5,"5 minutos"],[15,"15 minutos"],[30,"30 minutos"],[60,"1 hora"]].map(x=>`<option value="${x[0]}" ${+v===x[0]?"selected":""}>${x[1]}</option>`).join(""); }
+function secPaintSheet(){
+  const box=document.getElementById("sec-body"); if(!box) return;
+  const rec=secRecShow?`<div class="reccode-box"><b>Clave de recuperación</b><div class="reccode" id="reccode">${esc(secRecShow)}</div>
+      <div class="muted-note">Guárdala fuera de este dispositivo (papel o gestor de contraseñas). Es la única forma de abrir tus datos si olvidas la contraseña. <b>No se vuelve a mostrar.</b></div>
+      <button class="btn ghost sm" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('reccode').textContent);toast('Clave copiada','ok')">Copiar clave</button></div>`:"";
+  if(!secOn()){
+    box.innerHTML=`${rec}<p class="muted-note">Cifra los pacientes guardados en este dispositivo y pide contraseña al abrir. Los datos nunca salen de aquí. Si olvidas la contraseña <b>y</b> pierdes la clave de recuperación, no hay forma de recuperarlos.</p>
+      <label for="sec-p1">Contraseña o PIN (mínimo 6)</label><input id="sec-p1" type="password" autocomplete="new-password">
+      <label for="sec-p2">Repetir contraseña</label><input id="sec-p2" type="password" autocomplete="new-password">
+      <label for="sec-al">Bloquear tras inactividad</label><select id="sec-al">${alOpts(5)}</select>
+      <div class="menu"><button class="btn primary" style="flex:1" onclick="secDoEnable()">Activar cifrado</button></div>`;
+    return;
+  }
+  const c=secCfg();
+  box.innerHTML=`${rec}<div class="bk-row"><span>Estado</span><b>Cifrado activo</b></div>
+    <div class="bk-row"><span>Bloquear tras inactividad</span><select id="sec-al" onchange="secSetAL(this.value)" style="width:auto">${alOpts(c.autolock)}</select></div>
+    <div class="menu"><button class="btn primary" style="flex:1" onclick="secClose();lockNow()">Bloquear ahora</button></div>
+    <label for="sec-o">Cambiar contraseña</label><input id="sec-o" type="password" placeholder="Contraseña actual" autocomplete="current-password">
+    <input id="sec-n" type="password" placeholder="Contraseña nueva (mínimo 6)" autocomplete="new-password" style="margin-top:8px">
+    <div class="menu" style="margin-top:10px"><button class="btn ghost" style="flex:1" onclick="secDoChange()">Cambiar contraseña</button><button class="btn ghost" style="flex:1" onclick="secDoNewRec()">Nueva clave de recuperación</button></div>
+    <div class="mt" style="text-align:center"><button class="link" style="color:var(--danger)" onclick="secDoDisable()">Desactivar el cifrado</button></div>`;
+}
+async function secDoEnable(){
+  const p1=document.getElementById("sec-p1").value, p2=document.getElementById("sec-p2").value, al=+document.getElementById("sec-al").value;
+  if(p1.length<6){ toast("Mínimo 6 caracteres","err"); return; }
+  if(p1!==p2){ toast("Las contraseñas no coinciden","err"); return; }
+  try{ toast("Cifrando…"); secRecShow=await secEnable(p1,al); SEC.cfg.autolock=al; localStorage.setItem(KEY_SEC,JSON.stringify(SEC.cfg)); secPaintBtn(); secPaintSheet(); toast("Cifrado activado","ok"); }
+  catch(e){ console.error(e); SEC=null; toast("No se pudo activar el cifrado","err"); }
+}
+function secSetAL(v){ const c=secCfg(); c.autolock=+v; SEC.cfg=c; localStorage.setItem(KEY_SEC,JSON.stringify(c)); toast("Guardado","ok"); }
+async function secDoChange(){
+  const o=document.getElementById("sec-o").value, n=document.getElementById("sec-n").value;
+  if(n.length<6){ toast("Mínimo 6 caracteres","err"); return; }
+  try{ await secChangePass(o,n); toast("Contraseña cambiada","ok"); secPaintSheet(); }catch(e){ toast("La contraseña actual no es correcta","err"); }
+}
+async function secDoNewRec(){ try{ secRecShow=await secNewRecovery(); secPaintSheet(); }catch(e){ toast("No se pudo generar","err"); } }
+function secDoDisable(){
+  askSecret("Desactivar el cifrado","Escribe tu contraseña. Los datos quedarán sin cifrar en este dispositivo.","Contraseña",async pw=>{
+    await secDisable(pw); secPaintBtn(); secPaintSheet(); toast("Cifrado desactivado"); });
+}
+/* --- avisar de contraseña / código --- */
+let secretCb=null;
+function askSecret(title,msg,label,fn){
+  secretCb=fn; document.getElementById("pw-title").textContent=title; document.getElementById("pw-msg").textContent=msg||"";
+  document.getElementById("pw-label").textContent=label||"Contraseña"; const i=document.getElementById("pw-in"); i.value="";
+  document.getElementById("pw-err").textContent=""; document.getElementById("pw-ov").classList.add("on"); setTimeout(()=>i.focus(),50);
+}
+function pwClose(){ document.getElementById("pw-ov").classList.remove("on"); secretCb=null; }
+async function pwOk(){
+  const v=document.getElementById("pw-in").value; if(!v||!secretCb) return;
+  const btn=document.getElementById("pw-ok"); btn.disabled=true;
+  try{ await secretCb(v); pwClose(); }catch(e){ document.getElementById("pw-err").textContent="Incorrecto. Revisa e inténtalo de nuevo."; }
+  btn.disabled=false;
+}
+/* --- transferir a otro dispositivo --- */
+let trCode="";
+function trOpen(){
+  trCode=genTransferCode();
+  document.getElementById("tr-code").textContent=trCode;
+  document.getElementById("tr-ov").classList.add("on");
+}
+function trClose(){ document.getElementById("tr-ov").classList.remove("on"); trCode=""; }
+async function trCreate(){
+  if(locked) return;
+  try{
+    const pkg=await transferPackage(trCode);
+    await offerFile("synaplite-transferencia-"+todayStr()+".json",new Blob([JSON.stringify(pkg)],{type:"application/json"}),"Archivo de transferencia creado");
+  }catch(e){ console.error(e); toast("No se pudo crear el archivo","err"); }
+}
+/* --- exportar e importar (con soporte para copias cifradas y de transferencia) --- */
+async function exportData(){
+  if(secOn()&&SEC&&!locked){
+    const pkg=await encPackage();
+    offerFile("synaplite-pase-"+todayStr()+".enc.json",new Blob([JSON.stringify(pkg)],{type:"application/json"}),"Copia cifrada exportada");
+    return;
+  }
+  offerFile("synapmed-pase-"+todayStr()+".json",new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),"Copia exportada");
+}
+function confirmReplace(d){
+  const hay=state.patients.length, vienen=d.patients.length;
+  askConfirm("¿Reemplazar los datos de este dispositivo?",
+    `Se sustituirán ${hay} paciente${hay===1?"":"s"} por ${vienen} de la copia. Puedes deshacerlo desde la bitácora mientras la app siga abierta.`,
+    "Sí, importar",
+    ()=>{ const log=state.log; state=d; if(!state.log&&log) state.log=log; save(); render(); toast(`Copia importada · ${vienen} paciente${vienen===1?"":"s"}`,"ok"); });
+}
+function importData(ev){
+  const file=ev.target.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const d=JSON.parse(r.result);
+      if(d&&Array.isArray(d.patients)) confirmReplace(d);
+      else if(d&&d.format==="synaplite-enc") askSecret("Copia cifrada","Escribe la contraseña que tenías al hacer la copia, o su clave de recuperación.","Contraseña o clave",async s=>{ const x=await openEncPackage(d,s); if(!x||!Array.isArray(x.patients)) throw new Error("x"); confirmReplace(x); });
+      else if(d&&d.format==="synaplite-transfer") askSecret("Archivo de transferencia","Escribe el código que mostró el otro dispositivo.","Código de transferencia",async s=>{ const x=await openTransfer(d,s); if(!x||!Array.isArray(x.patients)) throw new Error("x"); confirmReplace(x); });
+      else toast("Archivo no válido","err");
+    }catch(e){ toast("No se pudo leer el archivo","err"); }
+    ev.target.value="";
+  };
+  r.readAsText(file);
+}
+/* --- bitácora y deshacer --- */
+const UNDO_MAX=12, LOG_MAX=300;
+let prevJSON=null, undoLabel="";
+const undoStack=[];
+const stateKey=()=>JSON.stringify(state,(k,v)=>k==="log"||k==="scores"?undefined:v);
+function baseline(){ try{ prevJSON=stateKey(); }catch(e){ prevJSON=null; } }
+const DIFF_ARR={labs:"laboratorios",vitals:"signos vitales",vma:"registros de VMA",infusiones:"infusiones",medicamentos:"medicamentos",pendientes:"pendientes",comentarios:"comentarios",archivos:"archivos",balance:"registros de balance",otros:"otros estudios",devices:"dispositivos"};
+const DIFF_FIELD={name:"nombre",bed:"cama",age:"edad",sex:"sexo",att:"adscrito",dx:"diagnóstico",presentation:"presentación",peso:"peso",talla:"talla",ingreso:"ingreso",guardia:"nota de guardia",onVMA:"estado de VMA",seenDate:"visto"};
+function diffSummary(a,b){
+  const A=new Map((a.patients||[]).map(p=>[p.id,p])), B=new Set((b.patients||[]).map(p=>p.id)), parts=[];
+  (a.patients||[]).forEach(p=>{ if(!B.has(p.id)) parts.push(`Eliminó a ${p.name||"(sin nombre)"}`); });
+  (b.patients||[]).forEach(p=>{
+    const o=A.get(p.id), nm=p.name||"(sin nombre)";
+    if(!o){ parts.push(`Agregó a ${nm}`); return; }
+    const d=[];
+    Object.keys(DIFF_ARR).forEach(k=>{ const x=o[k]||[], y=p[k]||[];
+      if(y.length!==x.length) d.push((y.length>x.length?"+":"−")+Math.abs(y.length-x.length)+" "+DIFF_ARR[k]);
+      else if(JSON.stringify(x)!==JSON.stringify(y)) d.push("cambios en "+DIFF_ARR[k]); });
+    if(!!o.alta!==!!p.alta) d.push(p.alta?"dado de alta":"reingresado");
+    Object.keys(DIFF_FIELD).forEach(k=>{ if(JSON.stringify(o[k])!==JSON.stringify(p[k])) d.push(DIFF_FIELD[k]+(k==="seenDate"?"":" editado")); });
+    if(d.length) parts.push(`${nm}: ${d.join("; ")}`);
+  });
+  return parts.join(" · ").slice(0,400);
+}
+function noteChange(){
+  if(locked||prevJSON===null) return;
+  const cur=stateKey(); if(cur===prevJSON) return;
+  let text=""; try{ text=diffSummary(JSON.parse(prevJSON),state); }catch(e){}
+  if(!text) text="Cambio";
+  if(undoLabel){ text=undoLabel+text; undoLabel=""; }
+  const now=Date.now();
+  undoStack.push({ts:now,text,json:prevJSON}); if(undoStack.length>UNDO_MAX) undoStack.shift();
+  (state.log=state.log||[]).push({ts:new Date(now).toISOString(),t:now,text});
+  if(state.log.length>LOG_MAX) state.log.splice(0,state.log.length-LOG_MAX);
+  prevJSON=cur;
+}
+function logOpen(){ logPaint(); document.getElementById("log-ov").classList.add("on"); }
+function logClose(){ document.getElementById("log-ov").classList.remove("on"); }
+function logPaint(){
+  const box=document.getElementById("log-body"); if(!box) return;
+  const log=(state.log||[]).slice().reverse().slice(0,120), ts=new Set(undoStack.map(u=>u.ts));
+  const un=new Map(undoStack.map(u=>[u.ts,u]));
+  box.innerHTML=(log.length?`<div class="items">${log.map(e=>{ const u=un.get(e.t);
+      return `<div class="item"><div class="it">${esc(e.text)}<span class="dose">${fmtTime(e.ts)}</span></div>${u?`<button class="atbbtn" onclick="undoTo(${u.ts})" title="Vuelve al estado anterior a este cambio">Deshacer</button>`:""}</div>`; }).join("")}</div>`
+    :`<div class="muted-note">Todavía no hay cambios registrados.</div>`)
+    +`<div class="muted-note" style="margin-top:10px">«Deshacer» vuelve al estado anterior a ese cambio y descarta lo posterior. Está disponible para los últimos ${UNDO_MAX} cambios mientras la app siga abierta.</div>`;
+}
+function undoTo(ts){
+  const i=undoStack.findIndex(u=>u.ts===ts); if(i<0) return;
+  const snap=undoStack[i];
+  askConfirm("¿Deshacer hasta aquí?",`Se vuelve al estado anterior a: «${snap.text}». Lo que se hizo después también se revierte.`,"Sí, deshacer",()=>{
+    const log=state.log; state=JSON.parse(snap.json); state.log=log;
+    undoStack.splice(i); undoLabel="Deshacer: ";
+    save(); render(); logPaint(); toast("Cambios deshechos","ok");
+  });
+}
+
 /* ---------------- respaldo automático diario ---------------- */
 /* Se elige una carpeta una sola vez (File System Access, Chrome/Edge). A la hora fijada la app
    escribe ahí synaplite-respaldo-AAAA-MM-DD-HHMM.json, el mismo formato de «Exportar»; se
@@ -2935,15 +3286,15 @@ async function bkPermission(ask){
   return p;
 }
 async function bkRun({force=false,ask=false}={}){
-  const c=BK.cfg; if(!c||!c.enabled||BK.running) return false;
+  const c=BK.cfg; if(!c||!c.enabled||BK.running||locked) return false;
   if(!force&&!bkDue()) return false;
   BK.running=true;
   try{
     if((await bkPermission(ask))!=="granted"){ BK.state="permiso"; bkPaint(); return false; }
     const d=new Date(), pad=n=>String(n).padStart(2,"0");
-    const name=`${BK_PREFIX}${todayStr()}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
+    const enc_=secOn()&&SEC, name=`${BK_PREFIX}${todayStr()}-${pad(d.getHours())}${pad(d.getMinutes())}${enc_?".enc":""}.json`;
     const fh=await c.dir.getFileHandle(name,{create:true}), w=await fh.createWritable();
-    await w.write(JSON.stringify(state,null,2)); await w.close();
+    await w.write(enc_?JSON.stringify(await encPackage()):JSON.stringify(state,null,2)); await w.close();
     const files=[]; for await (const [n,h] of c.dir.entries()) if(h.kind==="file"&&n.startsWith(BK_PREFIX)) files.push(n);
     files.sort(); for(const n of files.slice(0,Math.max(0,files.length-BK_KEEP))) await c.dir.removeEntry(n).catch(()=>{});
     await bkSave(Object.assign({},c,{lastAt:d.toISOString(),lastFile:name,lastError:null}));
@@ -2998,6 +3349,7 @@ function bkPaintSheet(){
     ${c&&c.lastFile?`<div class="muted-note">${esc(c.lastFile)}</div>`:""}
     <div class="muted-note" style="margin-top:10px">La copia se guarda sola a esa hora <b>mientras la app esté abierta</b>. Si no lo estaba, se guarda en cuanto la abras. Se conservan las últimas ${BK_KEEP}; se restauran con «Importar».</div>
     <div class="menu">
+      <button class="btn ghost" style="flex:1" onclick="bkClose();trOpen()">Transferir…</button>
       ${on?`<button class="btn ghost" style="flex:1" onclick="bkOff()">Desactivar</button><button class="btn ghost" style="flex:1" onclick="bkChoose()">Cambiar carpeta</button><button class="btn primary" style="flex:1.2" onclick="bkNow()">Respaldar ahora</button>`
          :`<button class="btn primary" style="flex:1" onclick="bkChoose()">Elegir carpeta y activar</button>`}
     </div>`;
@@ -3009,29 +3361,6 @@ async function bkInit(){
   document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ bkRun(); bkPaint(); } });
 }
 
-function exportData(){
-  const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
-  offerFile("synapmed-pase-"+todayStr()+".json", blob, "Copia exportada");
-}
-function importData(ev){
-  const file=ev.target.files[0]; if(!file) return;
-  const r=new FileReader();
-  r.onload=()=>{
-    try{
-      const d=JSON.parse(r.result);
-      if(d&&Array.isArray(d.patients)){
-        const hay=state.patients.length, vienen=d.patients.length;
-        askConfirm("¿Reemplazar los datos de este dispositivo?",
-          `Se sustituirán ${hay} paciente${hay===1?"":"s"} por ${vienen} de la copia. No se puede deshacer.`,
-          "Sí, importar",
-          ()=>{ state=d; save(); render(); toast(`Copia importada · ${vienen} paciente${vienen===1?"":"s"}`,"ok"); });
-      } else toast("Archivo no válido","err");
-    }catch(e){ toast("No se pudo leer el archivo","err"); }
-    ev.target.value="";
-  };
-  r.readAsText(file);
-}
-
 /* ---------------- arranque ---------------- */
 document.getElementById("overlay").addEventListener("click",e=>{ if(e.target.id==="overlay") closeSheet(); });
 document.getElementById("bk-ov").addEventListener("click",e=>{ if(e.target.id==="bk-ov") bkClose(); });
@@ -3040,7 +3369,11 @@ document.getElementById("confirm-ov").addEventListener("click",e=>{ if(e.target.
 document.getElementById("confirm-ok").addEventListener("click",()=>{ const cb=confirmCb; closeConfirm(); if(cb) cb(); });
 document.addEventListener("keydown",e=>{
   if(e.key==="Escape"){
-    if(document.getElementById("bk-ov").classList.contains("on")) bkClose();
+    if(document.getElementById("pw-ov").classList.contains("on")) pwClose();
+    else if(document.getElementById("bk-ov").classList.contains("on")) bkClose();
+    else if(document.getElementById("sec-ov").classList.contains("on")) secClose();
+    else if(document.getElementById("tr-ov").classList.contains("on")) trClose();
+    else if(document.getElementById("log-ov").classList.contains("on")) logClose();
     else if(document.getElementById("date-ov").classList.contains("on")) closeDateEdit();
     else if(document.getElementById("confirm-ov").classList.contains("on")) closeConfirm();
     else if(document.getElementById("lightbox").classList.contains("on")) closeLightbox();
@@ -3062,8 +3395,12 @@ paintThemeBtn();
 /* Se comprueba al arrancar para avisar antes de que capture nada, no después. */
 storageBroken=!storageOK();
 paintStorageBar();
-render();
+secPaintBtn();
+if(secOn()){ locked=true; showLock(""); } else { baseline(); render(); }
 bkInit();
+setInterval(autoLockCheck,15000);
+["pointerdown","keydown","touchstart"].forEach(ev=>document.addEventListener(ev,touchAct,{passive:true}));
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoLockCheck(); });
 
 </script>
 </body>

@@ -42,6 +42,23 @@ La app instalada desde `localhost:8766` solo abre si el servidor está encendido
 
 Ábrela una vez con internet. Desde ese momento funciona sin señal.
 
+## Seguridad, copias y transferencia
+
+- **Cifrado y bloqueo** (botón *Seguridad*): cifra los pacientes en el dispositivo con AES-256 y pide contraseña al abrir; se bloquea sola tras la inactividad que elijas. Al activarlo se muestra una **clave de recuperación** que debes guardar fuera del dispositivo: sin la contraseña ni esa clave, los datos no se pueden recuperar.
+- **Respaldo automático diario** (botón *Respaldo*): guarda en una carpeta a la hora elegida (21:00 por defecto) mientras la app esté abierta; si no lo estaba, al abrirla. Con el cifrado activo, las copias van cifradas y se abren con la contraseña que había al hacerlas, o con la clave de recuperación.
+- **Transferir a otro dispositivo** (*Respaldo → Transferir…*): crea un archivo cifrado con un código de un solo uso; en el otro dispositivo, *Importar* → archivo → código.
+- **Bitácora** (botón *Bitácora*): lista los cambios y permite deshacer los últimos 12 mientras la app siga abierta.
+
+## Pruebas y revisión clínica
+
+```bash
+cd ~/Documents/SynapLite
+node tests/run.js              # pruebas automáticas (corren el código real de la app)
+node tests/genformulas.js      # regenera la tabla de rangos de docs/FORMULAS.md
+```
+
+`docs/FORMULAS.md` lista todas las fórmulas, cortes y reglas de alertas para que se revisen clínicamente antes de usar la app con pacientes reales.
+
 ## 3. Actualizarla después de un cambio
 1. Edita `synaplite.html`, o pídeselo a Claude.
 2. Guarda y sube el cambio:

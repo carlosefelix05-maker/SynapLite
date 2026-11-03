@@ -1092,7 +1092,7 @@ function parseLabText(text){
   /* Una gasometría pegada sola, sin encabezado y con los electrolitos antes del pH: si no hay
      ningún dato de química, todo lo compartido es del gasómetro. */
   const sharedChem=new Set(Object.keys(GAS_SHARED)), gasKeys=new Set(LAB_GROUPS.find(g=>g.gas).f.map(f=>f.k));
-  if([...GAS_ONLY].some(k=>rec[k]!==undefined) && !Object.keys(rec).some(k=>!gasKeys.has(k)&&!sharedChem.has(k)&&k!=="gtipo")){
+  if(!gasMatch && [...GAS_ONLY].some(k=>rec[k]!==undefined) && !Object.keys(rec).some(k=>!gasKeys.has(k)&&!sharedChem.has(k)&&k!=="gtipo")){
     Object.keys(GAS_SHARED).forEach(k=>{ if(rec[k]!==undefined){ const g=GAS_SHARED[k]; if(rec[g]===undefined) rec[g]=rec[k]; delete rec[k]; } });
   }
   if(rec.gtipo==="" ) { const anyGas=LAB_GROUPS.find(g=>g.gas).f.some(f=>f.k!=="gtipo"&&rec[f.k]); if(!anyGas) delete rec.gtipo; }

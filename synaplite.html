@@ -357,6 +357,31 @@
     .pr .ent-card.sev-vigilancia{border-left-color:#b36b00} .pr .ent-card.sev-inestable{border-left-color:#b00020}
     .pr .ent-r{border-top:1px solid #ccc;font-size:9.5pt} .pr .ent-r em{color:#000} .pr .ent-al{color:#7a4a00} .pr .ent-mut{color:#555}
   }
+  .more-wrap{position:relative;display:inline-flex}
+  .more-pop{position:absolute;right:0;top:calc(100% + 8px);z-index:90;min-width:290px;max-width:min(92vw,340px);background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);padding:6px}
+  .more-pop[hidden]{display:none}
+  .more-pop button{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;text-align:left;background:none;border:none;border-radius:var(--radius-md);padding:9px 12px;color:var(--text);font:inherit;min-height:44px}
+  .more-pop button:hover,.more-pop button:focus-visible{background:var(--surface-sunken)}
+  .more-pop .mt{font-size:15px;font-weight:700} .more-pop .ms{font-size:12px;color:var(--text-muted)}
+  .more-pop .ms.warn{color:var(--warning);font-weight:700} .more-pop .ms.warn::before{content:"";display:inline-block;width:7px;height:7px;background:currentColor;clip-path:polygon(50% 0,100% 100%,0 100%);margin-right:5px}
+  .more-sep{height:1px;background:var(--border);margin:4px 6px}
+  .more-badge{position:absolute;top:-4px;right:-4px;width:12px;height:12px;background:var(--warning);border:2px solid var(--surface-deep);clip-path:none;border-radius:2px}
+  .more-badge[hidden]{display:none}
+  .subseg{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:8px 0 2px;padding:2px 0}
+  .subseg::-webkit-scrollbar{display:none}
+  .subseg button{white-space:nowrap;font:inherit;font-size:13px;font-weight:700;color:var(--text-muted);background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius-full);padding:6px 13px;min-height:34px;display:inline-flex;align-items:center;gap:6px}
+  .subseg button:hover{color:var(--text)}
+  .subseg button.active{color:var(--primary-ink);background:var(--primary-soft);border-color:var(--primary-strong)}
+  .subseg .cnt{font-size:11px;background:var(--surface-sunken);color:var(--text-muted);border-radius:var(--radius-full);padding:0 6px;font-variant-numeric:tabular-nums}
+  .subseg .dotv{width:7px;height:7px;border-radius:50%;background:var(--tertiary-strong)}
+  .alerts-wrap{margin-top:10px}
+  .alert-toggle{display:flex;align-items:center;gap:8px;width:100%;text-align:left;font:inherit;font-size:13px;line-height:1.35;padding:7px 12px;border-radius:var(--radius-md);border:1px solid var(--warning);color:var(--warning);background:var(--warning-soft);min-height:36px}
+  .alert-toggle.bad{border-color:var(--danger);color:var(--danger);background:var(--danger-soft)}
+  .alert-toggle::before{content:"";width:7px;height:7px;background:currentColor;clip-path:polygon(50% 0,100% 100%,0 100%);flex:none}
+  .alert-toggle.bad::before{clip-path:none;border-radius:1px}
+  .alert-prev{flex:1;min-width:0;font-weight:400;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .alert-toggle b{flex:none} .alert-toggle .caret{margin-left:auto;font-size:11px}
+  .alerts-wrap .alerts{margin-top:8px}
   .add-row{display:flex;gap:8px;margin-top:10px}
   .add-row input{flex:1;background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);color:var(--text);
     height:40px;padding:0 12px;font-size:16px;min-width:0}
@@ -588,17 +613,14 @@
         </div>
         <div class="head-actions">
           <button class="hbtn" onclick="entOpen()" title="Entrega de guardia (I-PASS) e impresión" aria-label="Entrega de guardia"><span class="lbl">Entrega</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M9 13h7M9 17h7"/></svg></button>
-          <button class="hbtn" id="secBtn" onclick="secOpen()" title="Seguridad: cifrado y bloqueo" aria-label="Seguridad"><span class="secdot"></span><span class="lbl">Seguridad</span></button>
-          <button class="hbtn" onclick="logOpen()" title="Bitácora de cambios y deshacer" aria-label="Bitácora"><span class="lbl">Bitácora</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button>
-          <button class="hbtn" id="bkBtn" onclick="bkOpen()" title="Respaldo automático diario" aria-label="Respaldo automático"><span class="bkdot"></span><span class="lbl">Respaldo</span></button>
-          <button class="hbtn" onclick="exportData()" title="Exportar copia de seguridad" aria-label="Exportar copia">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 20h16"/></svg><span class="lbl">Exportar</span>
-          </button>
-          <button class="hbtn" onclick="document.getElementById('importFile').click()" title="Importar copia de seguridad" aria-label="Importar copia">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M4 20h16"/></svg><span class="lbl">Importar</span>
-          </button>
-          <button class="hbtn sq" id="themeBtn" onclick="toggleTheme()" title="Cambiar tema" aria-label="Cambiar tema"></button>
+          <div class="more-wrap">
+            <button class="hbtn" id="moreBtn" onclick="moreToggle(event)" aria-haspopup="true" aria-expanded="false" aria-controls="morePop" title="Respaldo, seguridad, bitácora, exportar e importar">
+              <span class="lbl">Más</span><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg><span class="more-badge" id="moreBadge" hidden aria-label="Requiere atención"></span>
+            </button>
+            <div class="more-pop" id="morePop" role="menu" hidden></div>
+          </div>
           <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importData(event)">
+          <button class="hbtn sq" id="themeBtn" onclick="toggleTheme()" title="Cambiar tema" aria-label="Cambiar tema"></button>
         </div>
       </div>
     </header>
@@ -1604,25 +1626,39 @@ function detailHTML(p){
       </div>
       ${alertsHTML(p)}
       <div class="seg" role="tablist">
-        ${segBtn(p,'pres','Presentación','')}
-        ${segBtn(p,'sv','Signos vitales','')}
-        ${segBtn(p,'bal','Balance','')}
-        ${segBtn(p,'labs','Labs',nl?`<span class="cnt">${nl}</span>`:'')}
-        ${segBtn(p,'calc','Cálculos','')}
-        ${segBtn(p,'vma','VMA',onV?`<span class="dotv"></span>`:'')}
-        ${segBtn(p,'tx','Tratamiento',(ai+am)?`<span class="cnt">${ai+am}</span>`:'')}
-        ${segBtn(p,'pend','Pendientes',op?`<span class="cnt">${op}</span>`:'')}
-        ${segBtn(p,'nota','Nota','')}
-        ${segBtn(p,'com','Comentarios',nc?`<span class="cnt">${nc}</span>`:'')}
-        ${segBtn(p,'files','Archivos',nf?`<span class="cnt">${nf}</span>`:'')}
+        ${PANE_GROUPS.map(g=>grpBtn(p,g,{nl,ai,am,op,nc,nf,onV})).join("")}
       </div>
+      ${subTabs(p,{nl,ai,am,op,nc,nf,onV})}
     </div>
     <div class="pane-area"><div class="pane active">${(panes[pane]||presPaneHTML)(p)}</div></div>`;
 }
 
-function segBtn(p,key,label,extra){
-  const pane=openPanes[p.id]||"pres";
-  return `<button class="${pane===key?'active':''}" onclick="setPane('${p.id}','${key}')">${label}${extra||""}</button>`;
+/* Pestañas en dos niveles: 5 grupos arriba y, dentro de cada grupo, sus secciones. */
+const PANE_GROUPS=[
+  {k:"pres",label:"Presentación",panes:[["pres","Presentación"]]},
+  {k:"datos",label:"Signos y balance",panes:[["sv","Signos vitales"],["bal","Balance"]]},
+  {k:"est",label:"Estudios",panes:[["labs","Labs"],["calc","Cálculos"]]},
+  {k:"trat",label:"Tratamiento",panes:[["tx","Fármacos y dispositivos"],["vma","VMA"]]},
+  {k:"notas",label:"Notas",panes:[["pend","Pendientes"],["nota","Nota de evolución"],["com","Comentarios"],["files","Archivos"]]}
+];
+const PANE_ALIAS={inf:"tx",meds:"tx"};
+const grpLast={};
+const paneKey=p=>{ const k=openPanes[p.id]||"pres"; return PANE_ALIAS[k]||k; };
+const groupOf=k=>PANE_GROUPS.find(g=>g.panes.some(x=>x[0]===k))||PANE_GROUPS[0];
+function paneBadge(k,c){
+  const n={labs:c.nl,tx:c.ai+c.am,pend:c.op,com:c.nc,files:c.nf}[k];
+  if(k==="vma"&&c.onV) return `<span class="dotv" aria-label="En ventilación"></span>`;
+  return n?`<span class="cnt">${n}</span>`:"";
+}
+function grpBtn(p,g,c){
+  const cur=groupOf(paneKey(p)).k===g.k, target=grpLast[p.id+"|"+g.k]||g.panes[0][0];
+  const total=g.panes.reduce((a,x)=>a+({labs:c.nl,tx:c.ai+c.am,pend:c.op,com:c.nc,files:c.nf}[x[0]]||0),0);
+  const dot=g.k==="trat"&&c.onV?`<span class="dotv" aria-label="En ventilación"></span>`:"";
+  return `<button class="${cur?'active':''}" role="tab" aria-selected="${cur}" onclick="setPane('${p.id}','${target}')">${g.label}${total?`<span class="cnt">${total}</span>`:""}${dot}</button>`;
+}
+function subTabs(p,c){
+  const g=groupOf(paneKey(p)); if(g.panes.length<2) return "";
+  return `<div class="subseg" role="tablist" aria-label="${esc(g.label)}">${g.panes.map(x=>`<button class="${paneKey(p)===x[0]?"active":""}" role="tab" aria-selected="${paneKey(p)===x[0]}" onclick="setPane('${p.id}','${x[0]}')">${x[1]}${paneBadge(x[0],c)}</button>`).join("")}</div>`;
 }
 function checkSVG(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>`; }
 
@@ -2275,10 +2311,16 @@ function alertsOf(p){
   const bc=balLastClosed(p); if(bc&&bc.tot.rate!==null&&bc.tot.rate<0.5) add(bc.tot.rate<0.3?"bad":"warn",`Diuresis ${Math.round(bc.tot.rate*100)/100} mL/kg/h en las últimas 24 h`);
   return out;
 }
+const alertsOpen={};
 function alertsHTML(p){
-  const a=alertsOf(p); if(!a.length) return "";
-  return `<div class="alerts" role="list">${a.map(x=>`<span class="alert ${x.sev}" role="listitem">${esc(x.txt)}</span>`).join("")}</div>`;
+  const a=alertsOf(p).sort((x,y)=>(y.sev==="bad")-(x.sev==="bad")); if(!a.length) return "";
+  const open=!!alertsOpen[p.id], bad=a.filter(x=>x.sev==="bad").length, worst=bad?"bad":"warn";
+  const prev=a[0].txt.length>64?a[0].txt.slice(0,62)+"…":a[0].txt;
+  return `<div class="alerts-wrap"><button class="alert-toggle ${worst}" aria-expanded="${open}" onclick="toggleAlerts('${p.id}')">
+      <b>${a.length} alerta${a.length>1?"s":""}${bad?` · ${bad} grave${bad>1?"s":""}`:""}</b>${open?"":`<span class="alert-prev">${esc(prev)}</span>`}<span class="caret" aria-hidden="true">${open?"▲":"▼"}</span></button>
+    ${open?`<div class="alerts" role="list">${a.map(x=>`<span class="alert ${x.sev}" role="listitem">${esc(x.txt)}</span>`).join("")}</div>`:""}</div>`;
 }
+function toggleAlerts(id){ alertsOpen[id]=!alertsOpen[id]; refresh(id); }
 
 /* ---------------- entrega de guardia (I-PASS) e impresión ---------------- */
 function sevOf(p){
@@ -2529,7 +2571,7 @@ function formGroups(groups,prefix,id){
 }
 function formGrid(fields,prefix,id){
   return `<div class="form-grid">`+fields.map(f=>
-    `<label>${prefix==="lab"?labTag(f):f.label}<input id="${prefix}-${id}-${f.k}" placeholder="${f.ph}" inputmode="${f.im||'decimal'}" autocomplete="off"></label>`
+    `<label>${prefix==="lab"?labTag(f):f.label}<input id="${prefix}-${id}-${f.k}" placeholder="${f.ph}" inputmode="${f.im||'decimal'}" enterkeyhint="next" autocomplete="off"></label>`
   ).join("")+`</div>`;
 }
 
@@ -2766,7 +2808,7 @@ function onSearch(v){
 }
 function clearSearch(){ document.getElementById("q").value=""; onSearch(""); }
 
-function setPane(id,pane){ openPanes[id]=pane; refresh(id); const pa=document.querySelector(".pane-area"); if(pa) pa.scrollTop=0; }
+function setPane(id,pane){ openPanes[id]=pane; grpLast[id+"|"+groupOf(PANE_ALIAS[pane]||pane).k]=PANE_ALIAS[pane]||pane; refresh(id); const pa=document.querySelector(".pane-area"); if(pa) pa.scrollTop=0; }
 function darAlta(id){
   const p=find(id); if(!p) return;
   askConfirm("¿Dar de alta a "+(p.name||"este paciente")+"?","Saldrá del censo y del avance del pase. Sus datos se conservan en la pestaña «Altas» y puedes reingresarlo cuando quieras.","Sí, dar de alta",()=>{
@@ -3222,6 +3264,31 @@ function askConfirm(title,msg,okLabel,cb){
 }
 function closeConfirm(){ document.getElementById("confirm-ov").classList.remove("on"); confirmCb=null; }
 
+/* ---------------- menú «Más» del encabezado ---------------- */
+function morePaint(){
+  const c=BK.cfg, bkOn=!!(c&&c.enabled), sec=secOn(), pop=document.getElementById("morePop"); if(!pop) return;
+  const bkWarn=!bkOn||BK.state==="permiso"||BK.state==="error";
+  const bkTxt=!bkOn?"Sin configurar":BK.state==="permiso"?"Falta autorizar":BK.state==="error"?"Con error":c.lastAt?"Activo · última copia "+fmtTime(c.lastAt):"Activo";
+  const it=(fn,t,sub,warn)=>`<button role="menuitem" onclick="moreClose();${fn}"><span class="mt">${t}</span>${sub?`<span class="ms ${warn?"warn":""}">${esc(sub)}</span>`:""}</button>`;
+  pop.innerHTML=it("bkOpen()","Respaldo automático",bkTxt,bkWarn)+it("secOpen()","Seguridad",sec?"Cifrado activo":"Sin cifrar",!sec)
+    +it("logOpen()","Bitácora y deshacer",((state.log||[]).length)+" cambios registrados")+`<div class="more-sep" role="separator"></div>`
+    +it("exportData()","Exportar copia",sec?"Cifrada con tu contraseña":"Archivo JSON")+it("document.getElementById('importFile').click()","Importar copia","Reemplaza los datos de este dispositivo")
+    +it("trOpen()","Transferir a otro dispositivo","Archivo cifrado con código");
+}
+function moreBadge(){
+  const b=document.getElementById("moreBadge"); if(!b) return;
+  const c=BK.cfg, need=(!(c&&c.enabled)&&state.patients.length&&bkSupported())||BK.state==="permiso"||BK.state==="error";
+  b.hidden=!need;
+}
+function moreToggle(ev){ if(ev) ev.stopPropagation(); const pop=document.getElementById("morePop"); if(pop.hidden){ morePaint(); pop.hidden=false; document.getElementById("moreBtn").setAttribute("aria-expanded","true"); const f=pop.querySelector("button"); if(f) f.focus(); } else moreClose(); }
+function moreClose(){ const pop=document.getElementById("morePop"); if(!pop||pop.hidden) return; pop.hidden=true; const b=document.getElementById("moreBtn"); b.setAttribute("aria-expanded","false"); }
+document.addEventListener("click",e=>{ const w=e.target.closest&&e.target.closest(".more-wrap"); if(!w) moreClose(); });
+document.addEventListener("keydown",e=>{
+  const pop=document.getElementById("morePop"); if(!pop||pop.hidden) return;
+  if(e.key==="Escape"){ moreClose(); document.getElementById("moreBtn").focus(); e.stopImmediatePropagation(); }
+  if(e.key==="ArrowDown"||e.key==="ArrowUp"){ e.preventDefault(); const b=[...pop.querySelectorAll("button")], i=b.indexOf(document.activeElement); b[(i+(e.key==="ArrowDown"?1:-1)+b.length)%b.length].focus(); }
+});
+
 /* ---------------- respaldo ---------------- */
 /* ---------------- cifrado, bloqueo, transferencia y bitácora ---------------- */
 /* Con el cifrado activo, los datos viven en localStorage como AES-GCM 256. La llave de datos (DEK)
@@ -3345,7 +3412,7 @@ function autoLockCheck(){
   if(Date.now()-lastAct>c.autolock*60000) lockNow();
 }
 /* --- hoja de seguridad --- */
-function secPaintBtn(){ const b=document.getElementById("secBtn"); if(b) b.classList.toggle("on",secOn()); }
+function secPaintBtn(){ const b=document.getElementById("secBtn"); if(b) b.classList.toggle("on",secOn()); moreBadge(); }
 function secOpen(){ secPaintSheet(); document.getElementById("sec-ov").classList.add("on"); }
 function secClose(){ secRecShow=null; document.getElementById("sec-ov").classList.remove("on"); }
 function alOpts(v){ return [[0,"Nunca"],[2,"2 minutos"],[5,"5 minutos"],[15,"15 minutos"],[30,"30 minutos"],[60,"1 hora"]].map(x=>`<option value="${x[0]}" ${+v===x[0]?"selected":""}>${x[1]}</option>`).join(""); }
@@ -3580,6 +3647,7 @@ function bkPaint(){
   const el=document.getElementById("bkbar"), btn=document.getElementById("bkBtn"); if(!el) return;
   const c=BK.cfg, on=!!(c&&c.enabled);
   if(btn) btn.classList.toggle("on",on&&BK.state!=="permiso"&&BK.state!=="error");
+  moreBadge();
   let html="";
   if(on&&BK.state==="permiso") html=`<div class="sbar warn">${EDU_ICON.alerta}<span class="sbar-msg">El respaldo automático necesita tu autorización para escribir en la carpeta «${esc(c.dirName)}».</span><button class="link" onclick="bkAuthorize()">Autorizar</button></div>`;
   else if(on&&c.lastError) html=`<div class="sbar err">${EDU_ICON.alerta}<span class="sbar-msg">Falló el respaldo automático: ${esc(c.lastError)}</span><button class="link" onclick="bkOpen()">Revisar</button></div>`;
@@ -3614,6 +3682,19 @@ async function bkInit(){
   setInterval(()=>{ bkRun(); bkPaint(); },30000);
   document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ bkRun(); bkPaint(); } });
 }
+
+/* Enter avanza al siguiente campo del formulario de captura; en el último pasa al botón de guardar. */
+document.addEventListener("keydown",e=>{
+  if(e.key!=="Enter"||e.shiftKey||e.isComposing) return;
+  const t=e.target; if(!t||t.tagName!=="INPUT"||!t.closest||!t.closest(".form-grid")) return;
+  const pane=t.closest(".pane-area")||document;
+  const inputs=[...pane.querySelectorAll(".form-grid input:not([disabled])")], i=inputs.indexOf(t);
+  if(i<0) return;
+  e.preventDefault();
+  if(i<inputs.length-1){ const n=inputs[i+1]; n.focus(); if(n.select) n.select(); return; }
+  const btn=[...pane.querySelectorAll("button.btn.primary")].find(b=>t.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING);
+  if(btn) btn.focus(); else t.blur();
+});
 
 /* ---------------- arranque ---------------- */
 document.getElementById("overlay").addEventListener("click",e=>{ if(e.target.id==="overlay") closeSheet(); });

@@ -149,6 +149,16 @@ await t("transferencia cifrada con código",async()=>{
   const x=await ev(`openTransfer(JSON.parse(${js}),"123456789012")`); eq(x.patients[0].name,"Secreto");
   let bad=false; try{ await ev(`openTransfer(JSON.parse(${js}),"000000000000")`); }catch(e){ bad=true; } ok(bad,"código malo");
 });
+await t("pestañas: cada sección pertenece a un grupo y los alias antiguos funcionan",()=>{
+  eq(ev(`groupOf("labs").k`),"est"); eq(ev(`groupOf("bal").k`),"datos"); eq(ev(`groupOf("nota").k`),"notas"); eq(ev(`groupOf("vma").k`),"trat");
+  eq(ev(`PANE_ALIAS.inf`),"tx");
+  const all=ev(`PANE_GROUPS.reduce((a,g)=>a.concat(g.panes.map(x=>x[0])),[])`);
+  eq(all.slice().sort(),["bal","calc","com","files","labs","nota","pend","pres","sv","tx","vma"]);
+});
+await t("alertas plegadas por defecto y resumen con gravedad",()=>{
+  setP("P",base({medicamentos:[{id:"m",name:"Vancomicina",active:true,atb:true,start:dk(15),ts:new Date().toISOString()}]}));
+  const h=ev(`alertsHTML(P)`); ok(/aria-expanded="false"/.test(h)&&/1 grave/.test(h),h);
+});
 /* ---------- bitácora ---------- */
 await t("bitácora: resumen de cambios",()=>{
   const a={patients:[{id:"1",name:"Ana",medicamentos:[],labs:[]}]}, b={patients:[{id:"1",name:"Ana",medicamentos:[{id:"m"}],labs:[],dx:"x"},{id:"2",name:"Beto"}]};

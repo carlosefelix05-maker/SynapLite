@@ -336,6 +336,27 @@
   .alert::before{content:"";width:7px;height:7px;background:currentColor;clip-path:polygon(50% 0,100% 100%,0 100%);flex:none}
   .alert.bad{border-color:var(--danger);color:var(--danger);background:var(--danger-soft)} .alert.bad::before{clip-path:none;border-radius:1px}
   .dev-due{font-size:12px;font-weight:700;color:var(--warning)}
+  .ent-card{background:var(--surface);border:1px solid var(--border);border-left:6px solid var(--text-muted);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:12px}
+  .ent-card.sev-vigilancia{border-left-color:var(--warning)} .ent-card.sev-inestable{border-left-color:var(--danger)}
+  .ent-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+  .ent-h select{width:auto;font-size:14px;min-height:36px}
+  .ent-r{display:grid;grid-template-columns:28px 1fr;gap:10px;padding:6px 0;border-top:1px solid var(--border);font-size:14px;line-height:1.45}
+  .ent-r em{font-style:normal;font-weight:700;color:var(--primary-strong);font-family:var(--font-serif);font-size:18px}
+  .ent-r ul{margin:4px 0 0;padding-left:18px} .ent-r textarea{width:100%;min-height:64px;font:inherit;font-size:14px;color:var(--text);background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);padding:8px}
+  .ent-al{color:var(--warning);font-weight:700;margin-top:4px} .ent-mut{color:var(--text-muted)}
+  .ent-sev{font-weight:700} .ent-sevtxt{font-weight:700}
+  #printArea{display:none}
+  @media print{
+    body>*:not(#printArea){display:none!important}
+    #printArea{display:block!important;background:#fff;color:#000;font-family:Georgia,serif;font-size:10.5pt}
+    @page{margin:14mm}
+    .pr h1{font-size:18pt;margin:0 0 2pt} .pr-sub{color:#444;margin-bottom:10pt;font-size:10pt}
+    .pr-t{width:100%;border-collapse:collapse} .pr-t th,.pr-t td{border:1px solid #888;padding:4pt 6pt;text-align:left;vertical-align:top;font-size:9.5pt}
+    .pr-pre{white-space:pre-wrap;font-family:Georgia,serif;font-size:10.5pt;line-height:1.45;margin:0}
+    .pr .ent-card{border:1px solid #888;border-left:6px solid #666;background:#fff;color:#000;break-inside:avoid;margin-bottom:8pt;padding:6pt 8pt}
+    .pr .ent-card.sev-vigilancia{border-left-color:#b36b00} .pr .ent-card.sev-inestable{border-left-color:#b00020}
+    .pr .ent-r{border-top:1px solid #ccc;font-size:9.5pt} .pr .ent-r em{color:#000} .pr .ent-al{color:#7a4a00} .pr .ent-mut{color:#555}
+  }
   .add-row{display:flex;gap:8px;margin-top:10px}
   .add-row input{flex:1;background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);color:var(--text);
     height:40px;padding:0 12px;font-size:16px;min-width:0}
@@ -566,6 +587,7 @@
           </div>
         </div>
         <div class="head-actions">
+          <button class="hbtn" onclick="entOpen()" title="Entrega de guardia (I-PASS) e impresión" aria-label="Entrega de guardia"><span class="lbl">Entrega</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M9 13h7M9 17h7"/></svg></button>
           <button class="hbtn" id="secBtn" onclick="secOpen()" title="Seguridad: cifrado y bloqueo" aria-label="Seguridad"><span class="secdot"></span><span class="lbl">Seguridad</span></button>
           <button class="hbtn" onclick="logOpen()" title="Bitácora de cambios y deshacer" aria-label="Bitácora"><span class="lbl">Bitácora</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button>
           <button class="hbtn" id="bkBtn" onclick="bkOpen()" title="Respaldo automático diario" aria-label="Respaldo automático"><span class="bkdot"></span><span class="lbl">Respaldo</span></button>
@@ -681,6 +703,21 @@
     <button class="btn primary full" id="lock-btn" onclick="unlock()">Desbloquear</button>
   </div>
 </div>
+
+<div class="overlay" id="ent-ov">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="ent-title" style="max-width:920px">
+    <h3 id="ent-title">Entrega de guardia (I-PASS)</h3>
+    <p class="confirm-msg">I: gravedad · P: resumen del paciente · A: pendientes · S: contingencias que tú escribes. La gravedad se sugiere sola y la puedes cambiar.</p>
+    <div class="menu" style="margin:10px 0 14px;flex-wrap:wrap">
+      <button class="btn primary" onclick="entPrint()">Imprimir / PDF</button>
+      <button class="btn ghost" onclick="censoPrint()">Imprimir censo</button>
+      <button class="btn ghost" onclick="entCopy(this)">Copiar texto</button>
+    </div>
+    <div id="ent-body"></div>
+    <div class="mt" style="text-align:center"><button class="link" onclick="entClose()">Cerrar</button></div>
+  </div>
+</div>
+<div id="printArea" aria-hidden="true"></div>
 
 <div class="overlay" id="sec-ov">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sec-title" style="max-width:460px">
@@ -1947,6 +1984,7 @@ function notaPaneHTML(p){
     <textarea id="nota-${p.id}" class="pres-area nota-area" spellcheck="false" oninput="notaDraft['${p.id}']=this.value">${esc(notaDraft[p.id])}</textarea>
     <div class="add-row" style="margin-top:8px">
       <button class="btn primary sm" style="flex:1" onclick="copyNota('${p.id}',this)">Copiar nota</button>
+      <button class="btn ghost sm" onclick="notaPrint('${p.id}')">Imprimir / PDF</button>
       <button class="btn ghost sm" onclick="regenNota('${p.id}')" title="Vuelve a armar el borrador con los datos actuales y descarta tus ediciones">Regenerar</button>
     </div>`;
 }
@@ -2240,6 +2278,98 @@ function alertsOf(p){
 function alertsHTML(p){
   const a=alertsOf(p); if(!a.length) return "";
   return `<div class="alerts" role="list">${a.map(x=>`<span class="alert ${x.sev}" role="listitem">${esc(x.txt)}</span>`).join("")}</div>`;
+}
+
+/* ---------------- entrega de guardia (I-PASS) e impresión ---------------- */
+function sevOf(p){
+  if(p.sevManual) return {k:p.sevManual,manual:true};
+  const al=alertsOf(p), n=news2Of(p), pr=pressorsOf(p).length;
+  const unstable=pr>0||(n&&n.known>=7&&n.total>=7)||al.some(a=>a.sev==="bad");
+  const watch=!!p.onVMA||(n&&n.known>=7&&n.total>=5)||al.length>0;
+  return {k:unstable?"inestable":watch?"vigilancia":"estable"};
+}
+const SEV_LBL={estable:"Estable",vigilancia:"En vigilancia",inestable:"Inestable"};
+function critList(p){
+  const r=(p.labs||[]).slice(-1)[0]; if(!r) return "";
+  const bad=LAB_FIELDS.filter(f=>!f.text&&r[f.k]&&labStatus(f.k,r[f.k],p,r)==="bad").map(f=>labTag(f)+" "+r[f.k]);
+  return bad.length?`${bad.join(", ")} (${fmtShort(r.ts)})`:"";
+}
+function ipassData(p){
+  const v=lastVitals(p), vm=lastVMA(p), s=sofaOf(p), al=alertsOf(p);
+  const soporte=[];
+  if(p.onVMA&&vm){ const t=["modo","fio2","peep","vt"].map(k=>vm[k]?`${(VMA_FIELDS.find(f=>f.k===k)||{label:k}).label} ${vm[k]}`:"").filter(Boolean).join(", "); soporte.push("VMA"+(t?": "+t:"")); }
+  const inf=activeInf(p); if(inf.length) soporte.push("Infusiones: "+inf.map(i=>i.name+(i.dose?" "+i.dose:"")).join(", "));
+  const atb=activeMeds(p).filter(isAtb); if(atb.length) soporte.push("Antibióticos: "+atb.map(medText).join("; "));
+  const dv=devText(p); if(dv) soporte.push("Dispositivos: "+dv);
+  const datos=[];
+  if(v) datos.push(`SV (${fmtTime(v.ts)}): `+SV_FIELDS.filter(f=>v[f.k]).map(f=>`${f.label} ${v[f.k]}`).join(", "));
+  const cl=critList(p); if(cl) datos.push("Labs críticos: "+cl);
+  if(s.known) datos.push(`SOFA ${s.total}${s.known<6?" ("+s.known+"/6)":""}`);
+  const bt=balText(p); if(bt) datos.push("Balance: "+bt);
+  return {sev:sevOf(p),
+    head:`${p.bed?"Cama "+p.bed+" · ":""}${p.name||"(sin nombre)"}${p.age?" · "+p.age+" años":""}${p.sex?" · "+p.sex:""}${diaHosp(p)?" · día "+diaHosp(p):""}`,
+    dx:p.dx||"", resumen:(p.presentation||"").trim().slice(0,420), soporte, datos,
+    alertas:al.map(a=>a.txt), pend:(p.pendientes||[]).filter(x=>!x.done).map(x=>x.text), cont:(p.guardia||"").trim()};
+}
+function entregaList(){
+  return state.patients.filter(p=>!p.alta).slice().sort((a,b)=>String(a.bed||"").localeCompare(String(b.bed||""),"es",{numeric:true}));
+}
+function entregaText(){
+  const L=[`ENTREGA DE GUARDIA · ${new Date().toLocaleString("es-MX",{weekday:"long",day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"})}`,""];
+  entregaList().forEach(p=>{ const d=ipassData(p);
+    L.push(d.head.toUpperCase()+" — "+SEV_LBL[d.sev.k].toUpperCase());
+    if(d.dx) L.push("Dx: "+d.dx);
+    if(d.resumen) L.push("Resumen: "+d.resumen);
+    d.soporte.forEach(x=>L.push(x)); d.datos.forEach(x=>L.push(x));
+    if(d.alertas.length) L.push("Alertas: "+d.alertas.join("; "));
+    L.push("Pendientes: "+(d.pend.length?d.pend.join("; "):"ninguno"));
+    L.push("Si pasa algo: "+(d.cont||"[sin indicaciones]")); L.push("");
+  });
+  return L.join("\n").trim();
+}
+function entregaHTML(edit){
+  const L=entregaList();
+  if(!L.length) return `<div class="muted-note">No hay pacientes activos.</div>`;
+  return L.map(p=>{ const d=ipassData(p);
+    const li=a=>a.length?`<ul>${a.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:"";
+    return `<div class="ent-card sev-${d.sev.k}">
+      <div class="ent-h"><b>${esc(d.head)}</b>
+        ${edit?`<select onchange="setSev('${p.id}',this.value)" aria-label="Gravedad"><option value="" ${d.sev.manual?"":"selected"}>Gravedad: ${SEV_LBL[sevOf(Object.assign({},p,{sevManual:""})).k]} (automática)</option>${Object.keys(SEV_LBL).map(k=>`<option value="${k}" ${p.sevManual===k?"selected":""}>${SEV_LBL[k]}</option>`).join("")}</select>`
+          :`<span class="ent-sev">${SEV_LBL[d.sev.k]}</span>`}</div>
+      <div class="ent-r"><em>I</em><span class="ent-sevtxt">${SEV_LBL[d.sev.k]}${d.sev.manual?" (indicada)":""}</span></div>
+      <div class="ent-r"><em>P</em><div>${d.dx?`<b>${esc(d.dx)}</b>`:""}${d.resumen?`<div>${esc(d.resumen)}</div>`:""}${li(d.soporte)}${li(d.datos)}${d.alertas.length?`<div class="ent-al">Alertas: ${esc(d.alertas.join("; "))}</div>`:""}</div></div>
+      <div class="ent-r"><em>A</em><div>${d.pend.length?li(d.pend):`<span class="ent-mut">Sin pendientes</span>`}</div></div>
+      <div class="ent-r"><em>S</em><div>${edit?`<textarea placeholder="Si pasa X, hacer Y (contingencias)" onchange="setGuardia('${p.id}',this.value)">${esc(d.cont)}</textarea>`:(d.cont?esc(d.cont).replace(/\n/g,"<br>"):`<span class="ent-mut">Sin indicaciones</span>`)}</div></div>
+    </div>`; }).join("");
+}
+function setGuardia(id,v){ const p=find(id); if(!p) return; p.guardia=v.trim(); save(); }
+function setSev(id,v){ const p=find(id); if(!p) return; p.sevManual=v; save(); entPaint(); }
+function entOpen(){ entPaint(); document.getElementById("ent-ov").classList.add("on"); }
+function entClose(){ document.getElementById("ent-ov").classList.remove("on"); }
+function entPaint(){ const b=document.getElementById("ent-body"); if(b) b.innerHTML=entregaHTML(true); }
+function entCopy(btn){
+  const t=entregaText(), done=()=>{ if(btn){ const o=btn.textContent; btn.textContent="Copiada"; setTimeout(()=>{ btn.textContent=o; },1400); } };
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done).catch(()=>fallbackCopy(t,done)); else fallbackCopy(t,done);
+}
+function printHTML(html,title){
+  const a=document.getElementById("printArea"); a.innerHTML=html;
+  const old=document.title; if(title) document.title=title;
+  const done=()=>{ a.innerHTML=""; document.title=old; window.removeEventListener("afterprint",done); };
+  window.addEventListener("afterprint",done);
+  setTimeout(()=>window.print(),60);
+}
+const prStamp=()=>new Date().toLocaleString("es-MX",{weekday:"long",day:"numeric",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit"});
+function entPrint(){
+  printHTML(`<div class="pr"><h1>Entrega de guardia</h1><div class="pr-sub">${esc(prStamp())}</div>${entregaHTML(false)}</div>`,"Entrega de guardia "+todayStr());
+}
+function censoPrint(){
+  const rows=entregaList().map(p=>{ const d=ipassData(p); return `<tr><td>${esc(p.bed||"")}</td><td>${esc(p.name||"")}</td><td>${esc((p.age?p.age+" a ":"")+(p.sex||""))}</td><td>${esc(p.dx||"")}</td><td>${diaHosp(p)||""}</td><td>${SEV_LBL[d.sev.k]}</td><td>${d.pend.length}</td></tr>`; }).join("");
+  printHTML(`<div class="pr"><h1>Censo</h1><div class="pr-sub">${esc(prStamp())}</div>
+    <table class="pr-t"><thead><tr><th>Cama</th><th>Paciente</th><th>Edad</th><th>Diagnóstico</th><th>Día</th><th>Gravedad</th><th>Pend.</th></tr></thead><tbody>${rows}</tbody></table></div>`,"Censo "+todayStr());
+}
+function notaPrint(id){
+  const p=find(id); if(!p) return; const t=notaDraft[id]!==undefined?notaDraft[id]:notaText(p);
+  printHTML(`<div class="pr"><h1>Nota de evolución</h1><div class="pr-sub">${esc(p.name||"")}${p.bed?" · Cama "+esc(p.bed):""}${p.age?" · "+esc(p.age)+" años":""} · ${esc(prStamp())}</div><pre class="pr-pre">${esc(t)}</pre></div>`,"Nota "+(p.name||"")+" "+todayStr());
 }
 
 function calcPaneHTML(p){
@@ -3494,6 +3624,7 @@ document.getElementById("confirm-ok").addEventListener("click",()=>{ const cb=co
 document.addEventListener("keydown",e=>{
   if(e.key==="Escape"){
     if(document.getElementById("pw-ov").classList.contains("on")) pwClose();
+    else if(document.getElementById("ent-ov").classList.contains("on")) entClose();
     else if(document.getElementById("bk-ov").classList.contains("on")) bkClose();
     else if(document.getElementById("sec-ov").classList.contains("on")) secClose();
     else if(document.getElementById("tr-ov").classList.contains("on")) trClose();

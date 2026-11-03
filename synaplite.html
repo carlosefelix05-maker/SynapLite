@@ -2649,27 +2649,15 @@ function calcPaneHTML(p){
 function presPaneHTML(p){
   const txt=p.presentation||"";
   const soma=somaList(p);
-  if(phoneMQ.matches){
-    const editing=!txt||presEdit[p.id];
-    return `<div class="sec-title">Somatometría</div>
+  const editing=!txt||presEdit[p.id];
+  return `<div class="sec-title">Somatometría</div>
     ${soma.length?drvRow(soma):`<div class="muted-note">Sin peso ni talla. Agrégalos en “Editar datos” y la app calcula peso predicho, Vt/kg, diuresis en mL/kg/h y depuración.</div>`}
     <div class="sec-title">Presentación del paciente</div>
     ${editing
       ?`<textarea id="pres-${p.id}" class="pres-area" placeholder="Resumen del paciente: motivo de ingreso, antecedentes, resumen clínico, evolución…">${esc(txt)}</textarea>
         <div class="row-btns mt"><button class="btn primary grow" onclick="savePres('${p.id}')">Guardar presentación</button>${txt?`<button class="btn ghost" onclick="presEditSet('${p.id}',false)">Cancelar</button>`:""}</div>`
       :`<div class="pres-read">${esc(txt)}</div>
-        <button class="btn ghost full mt" onclick="presEditSet('${p.id}',true)">Editar presentación</button>`}`;
-  }
-  return `<div class="sec-title">Somatometría</div>
-    ${soma.length?drvRow(soma):`<div class="muted-note">Sin peso ni talla. Agrégalos en “Editar datos” y la app calcula peso predicho, Vt/kg, diuresis en mL/kg/h y depuración.</div>`}
-    <div class="sec-title">Presentación del paciente</div>
-    <div class="cols2"><div>
-    ${txt?`<div class="pres-read">${esc(txt)}</div>`:`<div class="muted-note">Sin presentación todavía. Escríbela a la derecha.</div>`}
-    </div><div>
-    <div class="sec-title">Editar</div>
-    <textarea id="pres-${p.id}" class="pres-area" placeholder="Resumen del paciente: motivo de ingreso, antecedentes, resumen clínico, evolución…">${esc(txt)}</textarea>
-    <button class="btn primary full mt" onclick="savePres('${p.id}')">Guardar presentación</button>
-    </div></div>`;
+        <button class="btn ghost mt" onclick="presEditSet('${p.id}',true)">Editar presentación</button>`}`;
 }
 
 function valueTiles(rec,fields,statusFn){

@@ -282,6 +282,15 @@
   .item.done .it .dose{text-decoration:line-through}
   .item .del{color:var(--text-muted);background:none;border:none;font-size:22px;line-height:1;padding:4px 8px;flex:none}
   .item .del:hover{color:var(--danger)}
+  .atb-line{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:4px;font-size:13px;color:var(--text-muted);text-decoration:none}
+  .atb-tag{font-size:12px;font-weight:700;background:var(--primary-strong);color:var(--on-primary);border-radius:var(--radius-lg);padding:2px 9px;font-variant-numeric:tabular-nums;display:inline-block}
+  .atb-tag.off{background:var(--surface-sunken);color:var(--text-muted)}
+  .atb-line label,.atb-new label{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);font-weight:700}
+  .atb-date{font:inherit;font-size:13px;color:var(--text);background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius-md);padding:2px 6px;min-height:28px}
+  .atb-new{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:14px}
+  .atbbtn{font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--text-muted);background:none;border:1px solid var(--border-strong);border-radius:var(--radius-md);padding:3px 7px;flex:none;min-height:28px}
+  .atbbtn.on{color:var(--on-primary);background:var(--primary-strong);border-color:var(--primary-strong)}
+  .item.done .atb-line{text-decoration:none}
   .add-row{display:flex;gap:8px;margin-top:10px}
   .add-row input{flex:1;background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);color:var(--text);
     height:40px;padding:0 12px;font-size:16px;min-width:0}
@@ -935,7 +944,18 @@ function activeInf(p){ return (p.infusiones||[]).filter(i=>i.active!==false); }
 function activeMeds(p){ return (p.medicamentos||[]).filter(m=>m.active!==false); }
 /* "500 mg · IV · c/8h" — solo las partes que se capturaron */
 function medLine(m){ return [m.dose,m.via,m.freq].filter(Boolean).join(" · "); }
-function medText(m){ return m.name+(medLine(m)?" "+[m.dose,m.via,m.freq].filter(Boolean).join(" "):""); }
+/* Antibióticos: se reconocen por nombre (y se puede marcar o desmarcar a mano con m.atb).
+   Los medicamentos anteriores a esta función caen al día en que se capturaron como inicio. */
+const ATB_RE=/\b(?:cef[a-z]+|penicilina|ampicilina|amoxicilina|cloxacilina|dicloxacilina|piperacilina|tazobactam|sulbactam|clavulan|meropenem|imipenem|ertapenem|doripenem|aztreonam|gentamicina|amikacina|tobramicina|estreptomicina|vancomicina|teicoplanina|linezolid|daptomicina|tigeciclina|doxiciclina|minociclina|azitromicina|claritromicina|eritromicina|clindamicina|metronidazol|ciprofloxacino|levofloxacino|moxifloxacino|trimetoprim|sulfametoxazol|colistina|polimixina|fosfomicina|nitrofurantoina|rifampicina|avibactam)/;
+function isAtb(m){ return m.atb===true || (m.atb===undefined && ATB_RE.test(norm(m.name))); }
+function atbStart(m){ return m.start||(m.ts?dayKey(m.ts):todayStr()); }
+function dayNum(k){ const a=k.split("-"); return Date.UTC(+a[0],+a[1]-1,+a[2])/864e5; }
+/* Día de tratamiento: el día de inicio cuenta como día 1. Suspendido sin fecha de suspensión → null. */
+function atbDays(m){
+  const end=m.active===false?m.stop:todayStr(); if(!end) return null;
+  return Math.max(1,Math.round(dayNum(end)-dayNum(atbStart(m)))+1);
+}
+function medText(m){ return m.name+(medLine(m)?" "+[m.dose,m.via,m.freq].filter(Boolean).join(" "):"")+(isAtb(m)&&m.active!==false?" (día "+atbDays(m)+")":""); }
 function openPend(p){ return (p.pendientes||[]).filter(x=>!x.done).length; }
 function seenToday(p){ return p.seenDate===todayStr(); }
 function find(id){ return state.patients.find(p=>p.id===id); }
@@ -1362,7 +1382,7 @@ function detailHTML(p){
   const pane=openPanes[p.id]||"pres", seen=seenToday(p);
   const L=visiblePatients(), i=L.findIndex(x=>x.id===p.id);
   const sub=[p.age?esc(p.age)+" años":"",esc(p.sex||""),p.att?esc(p.att):""].filter(Boolean).join(" · ");
-  const panes={pres:presPaneHTML,sv:svPaneHTML,labs:labsPaneHTML,calc:calcPaneHTML,vma:vmaPaneHTML,inf:infPaneHTML,meds:medsPaneHTML,pend:pendPaneHTML,com:comPaneHTML,files:filesPaneHTML};
+  const panes={pres:presPaneHTML,sv:svPaneHTML,labs:labsPaneHTML,calc:calcPaneHTML,vma:vmaPaneHTML,tx:txPaneHTML,inf:txPaneHTML,meds:txPaneHTML,pend:pendPaneHTML,com:comPaneHTML,files:filesPaneHTML};
   return `<div class="dhead">
       <div class="dhead-top">
         <button class="fb-back" onclick="closePatient()">${ARROW_L}Censo</button>
@@ -1402,8 +1422,7 @@ function detailHTML(p){
         ${segBtn(p,'labs','Labs',nl?`<span class="cnt">${nl}</span>`:'')}
         ${segBtn(p,'calc','Cálculos','')}
         ${segBtn(p,'vma','VMA',onV?`<span class="dotv"></span>`:'')}
-        ${segBtn(p,'inf','Infusiones',ai?`<span class="cnt">${ai}</span>`:'')}
-        ${segBtn(p,'meds','Medicamentos',am?`<span class="cnt">${am}</span>`:'')}
+        ${segBtn(p,'tx','Tratamiento',(ai+am)?`<span class="cnt">${ai+am}</span>`:'')}
         ${segBtn(p,'pend','Pendientes',op?`<span class="cnt">${op}</span>`:'')}
         ${segBtn(p,'com','Comentarios',nc?`<span class="cnt">${nc}</span>`:'')}
         ${segBtn(p,'files','Archivos',nf?`<span class="cnt">${nf}</span>`:'')}
@@ -1719,46 +1738,46 @@ function vmaPaneHTML(p){
     ${histRows(p.vma,VMA_FIELDS)}`;
 }
 
-function infPaneHTML(p){
-  const items=(p.infusiones||[]);
-  const rows=items.length?`<div class="items">`+items.map(it=>{
-    const active=it.active!==false;
-    return `<div class="item ${active?'':'done'}">
-       <button class="ic inf ${active?'on':''}" onclick="toggleInf('${p.id}','${it.id}')" title="${active?'Suspender':'Reactivar'}">${checkSVG()}</button>
-       <div class="it">${esc(it.name)}${it.dose?`<span class="dose">${esc(it.dose)}</span>`:""}</div>
-       <button class="del" onclick="delInf('${p.id}','${it.id}')" title="Eliminar">×</button>
+/* Infusiones, antibióticos y demás medicamentos en una sola pestaña. Los suspendidos bajan
+   al final y quedan tachados, pero no se borran para que quede el rastro. */
+function txRow(p,it,kind){
+  const active=it.active!==false, tg=kind==="inf"?"Inf":"Med";
+  const line=kind==="inf"?(it.dose||""):medLine(it), atb=kind!=="inf"&&isAtb(it), d=atb?atbDays(it):null;
+  const atbLine=atb?`<span class="atb-line"><span class="atb-tag ${active?"":"off"}">${active?"Día "+d:(d?d+" día"+(d>1?"s":"")+" de tratamiento":"Suspendido")}</span>
+        <label>Inicio <input type="date" class="atb-date" value="${esc(atbStart(it))}" max="${todayStr()}" onchange="setAtbStart('${p.id}','${it.id}',this.value)"></label>
+        ${!active&&it.stop?`<span class="atb-stop">suspendido ${esc(it.stop.split("-").reverse().join("/"))}</span>`:""}</span>`:"";
+  return `<div class="item ${active?'':'done'}">
+       <button class="ic ${kind==="inf"?"inf":"med"} ${active?'on':''}" onclick="toggle${tg}('${p.id}','${it.id}')" title="${active?'Suspender':'Reactivar'}">${checkSVG()}</button>
+       <div class="it">${esc(it.name)}${line?`<span class="dose">${esc(line)}</span>`:""}${atbLine}</div>
+       ${kind!=="inf"?`<button class="atbbtn ${atb?"on":""}" onclick="toggleAtb('${p.id}','${it.id}')" title="${atb?"Quitar marca de antibiótico":"Marcar como antibiótico"}">ATB</button>`:""}
+       <button class="del" onclick="del${tg}('${p.id}','${it.id}')" title="Eliminar">×</button>
      </div>`;
-  }).join("")+`</div>`:`<div class="muted-note">Sin infusiones. Agrega una abajo.</div>`;
-  return `<div class="sec-title">Infusiones</div>${rows}
+}
+function txPaneHTML(p){
+  const byAct=(a,b)=>(a.active===false?1:0)-(b.active===false?1:0);
+  const meds=(p.medicamentos||[]).slice().sort(byAct), inf=(p.infusiones||[]).slice().sort(byAct);
+  const atbs=meds.filter(isAtb), others=meds.filter(m=>!isAtb(m));
+  const list=(arr,kind,empty)=>arr.length?`<div class="items">${arr.map(it=>txRow(p,it,kind)).join("")}</div>`:`<div class="muted-note">${empty}</div>`;
+  const enter=`onkeydown="if(event.key==='Enter')addMed('${p.id}')"`;
+  return `<div class="sec-title">Antibióticos</div>${list(atbs,"med","Sin antibióticos. Agrégalos abajo en «Agregar medicamento»; se reconocen por el nombre.")}
+    <div class="sec-title">Infusiones</div>${list(inf,"inf","Sin infusiones.")}
     <div class="add-row">
       <input id="in-${p.id}" placeholder="Fármaco (Norepinefrina…)" autocomplete="off" onkeydown="if(event.key==='Enter')addInf('${p.id}')">
       <input id="id-${p.id}" placeholder="Dosis (0.1 mcg/kg/min)" autocomplete="off" style="flex:1.2" onkeydown="if(event.key==='Enter')addInf('${p.id}')">
       <button class="btn primary sm" onclick="addInf('${p.id}')" aria-label="Agregar infusión">+</button>
-    </div>`;
-}
-
-/* Medicamentos indicados: los suspendidos bajan al final y quedan tachados,
-   pero no se borran para que quede el rastro de lo que traía. */
-function medsPaneHTML(p){
-  const items=(p.medicamentos||[]).slice().sort((a,b)=>(a.active===false?1:0)-(b.active===false?1:0));
-  const rows=items.length?`<div class="items">`+items.map(it=>{
-    const active=it.active!==false, line=medLine(it);
-    return `<div class="item ${active?'':'done'}">
-       <button class="ic med ${active?'on':''}" onclick="toggleMed('${p.id}','${it.id}')" title="${active?'Suspender':'Reactivar'}">${checkSVG()}</button>
-       <div class="it">${esc(it.name)}${line?`<span class="dose">${esc(line)}</span>`:""}</div>
-       <button class="del" onclick="delMed('${p.id}','${it.id}')" title="Eliminar">×</button>
-     </div>`;
-  }).join("")+`</div>`:`<div class="muted-note">Sin medicamentos indicados. Agrega el primero abajo.</div>`;
-  const enter=`onkeydown="if(event.key==='Enter')addMed('${p.id}')"`;
-  return `<div class="sec-title">Medicamentos indicados</div>${rows}
+    </div>
+    <div class="sec-title">Medicamentos</div>${list(others,"med","Sin otros medicamentos indicados.")}
+    <div class="sec-title">Agregar medicamento</div>
     <div class="med-add">
-      <input id="mn-${p.id}" class="wide" placeholder="Fármaco (Meropenem…)" autocomplete="off" ${enter}>
+      <input id="mn-${p.id}" class="wide" placeholder="Fármaco (Meropenem, Omeprazol…)" autocomplete="off" ${enter}>
       <input id="md-${p.id}" placeholder="Dosis (1 g)" autocomplete="off" ${enter}>
       <input id="mv-${p.id}" placeholder="Vía (IV, VO, SC…)" autocomplete="off" ${enter}>
       <input id="mf-${p.id}" placeholder="Frecuencia (c/8h)" autocomplete="off" ${enter}>
+      <div class="atb-new"><label><input type="checkbox" id="ma-${p.id}"> Es antibiótico</label>
+        <label>Inicio <input type="date" id="ms-${p.id}" value="${todayStr()}" max="${todayStr()}"></label></div>
       <button class="btn primary" onclick="addMed('${p.id}')">Agregar</button>
     </div>
-    ${items.length?`<button class="btn ghost sm full mt" onclick="copyMeds('${p.id}',this)">Copiar esquema</button>`:""}`;
+    ${meds.length?`<button class="btn ghost sm full mt" onclick="copyMeds('${p.id}',this)">Copiar esquema</button>`:""}`;
 }
 
 function pendPaneHTML(p){
@@ -2038,11 +2057,11 @@ function addInf(id){
   const name=n?n.value.trim():"", dose=dd?dd.value.trim():"";
   if(!name){ if(n) n.focus(); return; }
   p.infusiones=p.infusiones||[]; p.infusiones.push({id:uid(),name,dose,active:true});
-  openPanes[id]="inf"; save(); refresh(id);
+  openPanes[id]="tx"; save(); refresh(id);
   const el=document.getElementById(`in-${id}`); if(el) el.focus();
 }
-function toggleInf(pid,iid){ const p=find(pid); if(!p) return; const it=(p.infusiones||[]).find(x=>x.id===iid); if(!it) return; it.active=it.active===false; openPanes[pid]="inf"; save(); refresh(pid); }
-function delInf(pid,iid){ const p=find(pid); if(!p) return; p.infusiones=(p.infusiones||[]).filter(x=>x.id!==iid); openPanes[pid]="inf"; save(); refresh(pid); }
+function toggleInf(pid,iid){ const p=find(pid); if(!p) return; const it=(p.infusiones||[]).find(x=>x.id===iid); if(!it) return; it.active=it.active===false; openPanes[pid]="tx"; save(); refresh(pid); }
+function delInf(pid,iid){ const p=find(pid); if(!p) return; p.infusiones=(p.infusiones||[]).filter(x=>x.id!==iid); openPanes[pid]="tx"; save(); refresh(pid); }
 
 function addMed(id){
   const p=find(id); if(!p) return;
@@ -2050,12 +2069,22 @@ function addMed(id){
   const name=g("mn");
   if(!name){ const e=document.getElementById(`mn-${id}`); if(e) e.focus(); return; }
   p.medicamentos=p.medicamentos||[];
-  p.medicamentos.push({id:uid(),name,dose:g("md"),via:g("mv"),freq:g("mf"),active:true,ts:new Date().toISOString()});
-  openPanes[id]="meds"; save(); refresh(id);
+  const chk=document.getElementById(`ma-${id}`), st=g("ms");
+  p.medicamentos.push({id:uid(),name,dose:g("md"),via:g("mv"),freq:g("mf"),active:true,ts:new Date().toISOString(),
+    atb:!!(chk&&chk.checked)||ATB_RE.test(norm(name)),start:st||todayStr()});
+  openPanes[id]="tx"; save(); refresh(id);
   const e2=document.getElementById(`mn-${id}`); if(e2) e2.focus();
 }
-function toggleMed(pid,mid){ const p=find(pid); if(!p) return; const it=(p.medicamentos||[]).find(x=>x.id===mid); if(!it) return; it.active=it.active===false; openPanes[pid]="meds"; save(); refresh(pid); }
-function delMed(pid,mid){ const p=find(pid); if(!p) return; p.medicamentos=(p.medicamentos||[]).filter(x=>x.id!==mid); openPanes[pid]="meds"; save(); refresh(pid); }
+function toggleMed(pid,mid){ const p=find(pid); if(!p) return; const it=(p.medicamentos||[]).find(x=>x.id===mid); if(!it) return; it.active=it.active===false;
+  if(it.active===false) it.stop=todayStr(); else delete it.stop;
+  openPanes[pid]="tx"; save(); refresh(pid); }
+function toggleAtb(pid,mid){ const p=find(pid); if(!p) return; const it=(p.medicamentos||[]).find(x=>x.id===mid); if(!it) return;
+  if(it.start===undefined) it.start=atbStart(it);
+  it.atb=!isAtb(it); openPanes[pid]="tx"; save(); refresh(pid); }
+function setAtbStart(pid,mid,v){ const p=find(pid); if(!p||!v) return; const it=(p.medicamentos||[]).find(x=>x.id===mid); if(!it) return;
+  if(v>todayStr()) v=todayStr();
+  it.start=v; if(it.stop&&it.stop<v) it.stop=v; openPanes[pid]="tx"; save(); refresh(pid); }
+function delMed(pid,mid){ const p=find(pid); if(!p) return; p.medicamentos=(p.medicamentos||[]).filter(x=>x.id!==mid); openPanes[pid]="tx"; save(); refresh(pid); }
 function copyMeds(id,btn){
   const p=find(id); if(!p) return;
   const act=activeMeds(p); if(!act.length){ toast("No hay medicamentos activos","err"); return; }
@@ -2104,7 +2133,8 @@ function copySummary(id){
   if(p.onVMA&&vm) L.push(`VMA: `+VMA_FIELDS.filter(f=>vm[f.k]).map(f=>`${f.label} ${vm[f.k]}`).join(", "));
   const inf=activeInf(p);
   if(inf.length) L.push(`Infusiones: `+inf.map(i=>i.name+(i.dose?` ${i.dose}`:"")).join(", "));
-  const meds=activeMeds(p);
+  const atbL=activeMeds(p).filter(isAtb), meds=activeMeds(p).filter(m=>!isAtb(m));
+  if(atbL.length) L.push(`Antibióticos: `+atbL.map(medText).join("; "));
   if(meds.length) L.push(`Medicamentos: `+meds.map(medText).join("; "));
   const pend=(p.pendientes||[]).filter(x=>!x.done);
   if(pend.length) L.push(`Pendientes: `+pend.map(x=>x.text).join("; "));

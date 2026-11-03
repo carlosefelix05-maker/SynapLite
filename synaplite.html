@@ -291,6 +291,25 @@
   .atbbtn{font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--text-muted);background:none;border:1px solid var(--border-strong);border-radius:var(--radius-md);padding:3px 7px;flex:none;min-height:28px}
   .atbbtn.on{color:var(--on-primary);background:var(--primary-strong);border-color:var(--primary-strong)}
   .item.done .atb-line{text-decoration:none}
+  .cin.na{opacity:.6} .cin small{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .trends{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+  .trend{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:8px 10px;color:var(--text-muted)}
+  .trend-h{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+  .trend-v{font-weight:700;font-size:15px;color:var(--text);font-variant-numeric:tabular-nums}
+  .trend .spk{display:block;width:100%;height:34px;margin:4px 0;color:var(--primary-strong)}
+  .trend.warn{border-color:var(--warning)} .trend.warn .trend-v,.trend.warn .spk{color:var(--warning)}
+  .trend.bad{border-color:var(--danger)} .trend.bad .trend-v,.trend.bad .spk{color:var(--danger)}
+  .trend-s{font-size:11px;line-height:1.3;font-variant-numeric:tabular-nums}
+  .icalc{padding:12px;background:var(--surface-sunken);border-top:1px solid var(--border)}
+  .icrow{margin-top:8px}
+  .icalc label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--text-muted)}
+  .icalc input,.icalc select{font:inherit;font-size:16px;font-weight:400;color:var(--text);background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);padding:8px 10px;min-height:44px;min-width:0;width:100%}
+  .icgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin:10px 0}
+  .icin{display:flex;gap:6px} .icin input{flex:1} .icin select{width:auto;flex:none}
+  .icres{font-size:15px;min-height:22px;margin-bottom:8px;color:var(--text)} .icres b{font-size:20px} .icres.warn{color:var(--warning)}
+  .rate-tag{font-weight:700;color:var(--primary-strong);margin-left:8px}
+  .nota-area{min-height:560px;font-family:ui-monospace,Menlo,monospace;font-size:14px;line-height:1.5}
+  .pane-area>.pane:has(.nota-area){max-width:1040px}
   .add-row{display:flex;gap:8px;margin-top:10px}
   .add-row input{flex:1;background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);color:var(--text);
     height:40px;padding:0 12px;font-size:16px;min-width:0}
@@ -657,7 +676,7 @@ const EDU_ICON={
 
 const SV_FIELDS=[
   {k:"ta",label:"TA",ph:"120/80",im:"text"},{k:"fc",label:"FC",ph:"lpm",im:"decimal"},{k:"fr",label:"FR",ph:"rpm",im:"decimal"},
-  {k:"temp",label:"Temp",ph:"°C",im:"decimal"},{k:"sato2",label:"SatO₂",ph:"%",im:"decimal"},{k:"gluc",label:"Glucosa",ph:"mg/dL",im:"decimal"},
+  {k:"temp",label:"Temp",ph:"°C",im:"decimal"},{k:"sato2",label:"SatO₂",ph:"%",im:"decimal"},{k:"gcs",label:"Glasgow",ph:"3–15",im:"decimal"},{k:"gluc",label:"Glucosa",ph:"mg/dL",im:"decimal"},
   {k:"diuresis",label:"Diuresis",ph:"mL · mL/kg/h",im:"text"},{k:"balance",label:"Balance",ph:"± mL",im:"text"},
 ];
 /* Parámetros de ventilación mecánica agrupados como se dictan en el pase.
@@ -1001,6 +1020,7 @@ function svStatus(k,v){
     case "fc":    return (n<50||n>130)?"bad":((n<60||n>100)?"warn":"");
     case "fr":    return (n<10||n>30)?"bad":(n>22?"warn":"");
     case "temp":  if(n>45) return "";  return (n<35||n>=39)?"bad":((n<36||n>=37.8)?"warn":"");
+    case "gcs":   return n<=8?"bad":(n<15?"warn":"");
     case "sato2": if(n>100) return ""; return (n<90)?"bad":((n<94)?"warn":"");
     case "gluc":  return (n<60||n>250)?"bad":((n<80||n>180)?"warn":"");
   }
@@ -1382,7 +1402,7 @@ function detailHTML(p){
   const pane=openPanes[p.id]||"pres", seen=seenToday(p);
   const L=visiblePatients(), i=L.findIndex(x=>x.id===p.id);
   const sub=[p.age?esc(p.age)+" años":"",esc(p.sex||""),p.att?esc(p.att):""].filter(Boolean).join(" · ");
-  const panes={pres:presPaneHTML,sv:svPaneHTML,labs:labsPaneHTML,calc:calcPaneHTML,vma:vmaPaneHTML,tx:txPaneHTML,inf:txPaneHTML,meds:txPaneHTML,pend:pendPaneHTML,com:comPaneHTML,files:filesPaneHTML};
+  const panes={pres:presPaneHTML,sv:svPaneHTML,labs:labsPaneHTML,calc:calcPaneHTML,vma:vmaPaneHTML,tx:txPaneHTML,nota:notaPaneHTML,inf:txPaneHTML,meds:txPaneHTML,pend:pendPaneHTML,com:comPaneHTML,files:filesPaneHTML};
   return `<div class="dhead">
       <div class="dhead-top">
         <button class="fb-back" onclick="closePatient()">${ARROW_L}Censo</button>
@@ -1424,6 +1444,7 @@ function detailHTML(p){
         ${segBtn(p,'vma','VMA',onV?`<span class="dotv"></span>`:'')}
         ${segBtn(p,'tx','Tratamiento',(ai+am)?`<span class="cnt">${ai+am}</span>`:'')}
         ${segBtn(p,'pend','Pendientes',op?`<span class="cnt">${op}</span>`:'')}
+        ${segBtn(p,'nota','Nota','')}
         ${segBtn(p,'com','Comentarios',nc?`<span class="cnt">${nc}</span>`:'')}
         ${segBtn(p,'files','Archivos',nf?`<span class="cnt">${nf}</span>`:'')}
       </div>
@@ -1485,6 +1506,301 @@ function calcCard(title,formula,ins,fn){
     ${res&&res.note?`<div class="cnote">${esc(res.note)}</div>`:""}
   </div>`;
 }
+/* ---------------- escalas de gravedad: SOFA, qSOFA, NEWS2 ---------------- */
+/* Dosis a mcg/kg/min. Acepta mcg/kg/min, mcg/kg/h, mcg/min y mg/h (estos tres con peso). */
+function parseDose(t){
+  const m=norm(String(t||"")).match(/(\d+(?:[.,]\d+)?)\s*(mcg|ug|µg|mg|ui|u)\s*\/\s*(?:(kg)\s*\/\s*)?(min|hr|h|hora)\b/);
+  if(!m) return null;
+  const u=m[2]==="mg"?"mg":(m[2]==="ui"||m[2]==="u")?"UI":"mcg";
+  return {n:parseFloat(m[1].replace(",",".")),amtU:u,perKg:!!m[3],per:m[4]==="min"?"min":"h"};
+}
+function doseMcgKgMin(p,d){
+  if(!d||d.amtU==="UI") return null;
+  let x=d.n*(d.amtU==="mg"?1000:1);
+  if(d.per==="h") x/=60;
+  if(!d.perKg){ const w=pesoKg(p); if(!w) return null; x/=w; }
+  return x;
+}
+function pressorsOf(p){
+  const out=[];
+  activeInf(p).forEach(i=>{
+    const n=norm(i.name); let k=null;
+    if(/norepi|noradren/.test(n)) k="norepi";
+    else if(/epinefrina|adrenalina/.test(n)) k="epi";
+    else if(/dopamina/.test(n)) k="dopa";
+    else if(/dobutamina/.test(n)) k="dobu";
+    if(k) out.push({k,name:i.name,d:doseMcgKgMin(p,parseDose(i.dose))});
+  });
+  return out;
+}
+function vitalsNums(p){
+  const v=lastVitals(p); if(!v) return null;
+  const m=String(v.ta||"").match(/(\d{2,3})\s*[\/\-]\s*(\d{2,3})/);
+  return {ts:v.ts,pas:m?+m[1]:null,pad:m?+m[2]:null,fc:num(v.fc),fr:num(v.fr),temp:num(v.temp),sat:num(v.sato2),gcs:num(v.gcs)};
+}
+function sofaOf(p){
+  const parts=[], V=vitalsNums(p), fio=fio2Used(p);
+  const lab=k=>{ const x=labLatest(p,k); return x?x.n:null; };
+  const add=(k,label,pts,det)=>parts.push({k,label,pts,det});
+  // Respiratorio
+  const po=labLatest(p,"po2"), ven=po&&/ven/.test((po.rec.gtipo||"").toLowerCase());
+  if(po&&!ven&&fio){
+    const pf=po.n/fio.n, vent=!!p.onVMA;
+    add("res","Resp",pf<100&&vent?4:pf<200&&vent?3:pf<300?2:pf<400?1:0,"PaFi "+Math.round(pf)+(vent?" · VMA":""));
+  } else add("res","Resp",null,"falta PaO₂ arterial o FiO₂");
+  // Coagulación
+  const pl=lab("plaq"); add("coa","Coag",pl===null?null:pl<20?4:pl<50?3:pl<100?2:pl<150?1:0,pl===null?"falta plaquetas":"Plaq "+pl);
+  // Hígado
+  const bt=lab("bt"); add("hep","Hígado",bt===null?null:bt>=12?4:bt>=6?3:bt>=2?2:bt>=1.2?1:0,bt===null?"falta BT":"BT "+bt);
+  // Cardiovascular
+  const pr=pressorsOf(p), pam=V&&V.pas!==null&&V.pad!==null?(V.pas+2*V.pad)/3:null;
+  if(pr.length){
+    let best=0, det=[];
+    pr.forEach(x=>{
+      let s;
+      if(x.k==="dobu") s=2;
+      else if(x.k==="dopa") s=x.d===null?3:x.d>15?4:x.d>5?3:2;
+      else s=x.d===null?3:x.d>0.1?4:3;
+      best=Math.max(best,s);
+      det.push(x.name+(x.d===null?" (dosis no interpretable)":" "+Math.round(x.d*100)/100+" mcg/kg/min"));
+    });
+    add("cv","Cardiov",best,det.join(", "));
+  } else if(pam!==null) add("cv","Cardiov",pam<70?1:0,"PAM "+Math.round(pam));
+  else add("cv","Cardiov",null,"falta TA o vasopresor");
+  // Neurológico
+  const g=V?V.gcs:null; add("cns","Neuro",g===null?null:g<6?4:g<10?3:g<13?2:g<15?1:0,g===null?"falta Glasgow":"Glasgow "+g);
+  // Renal (solo creatinina; la diuresis no se interpreta aquí)
+  const cr=lab("cr"); add("ren","Renal",cr===null?null:cr>=5?4:cr>=3.5?3:cr>=2?2:cr>=1.2?1:0,cr===null?"falta Cr":"Cr "+cr);
+  const known=parts.filter(x=>x.pts!==null);
+  return {total:known.reduce((a,x)=>a+x.pts,0),known:known.length,parts};
+}
+function qsofaOf(p){
+  const V=vitalsNums(p); if(!V) return null;
+  const c=[["FR ≥ 22",V.fr===null?null:V.fr>=22],["PAS ≤ 100",V.pas===null?null:V.pas<=100],["Glasgow < 15",V.gcs===null?null:V.gcs<15]];
+  return {total:c.filter(x=>x[1]).length,known:c.filter(x=>x[1]!==null).length,c,ts:V.ts};
+}
+function news2Of(p){
+  const V=vitalsNums(p); if(!V) return null;
+  const fio=fio2Used(p), o2=!!p.onVMA||(fio&&fio.n>0.21);
+  const c=[];
+  c.push(["FR",V.fr,V.fr===null?null:V.fr<=8?3:V.fr<=11?1:V.fr<=20?0:V.fr<=24?2:3]);
+  c.push(["SatO₂",V.sat,V.sat===null?null:V.sat<=91?3:V.sat<=93?2:V.sat<=95?1:0]);
+  c.push(["O₂ suplementario",o2?"sí":"no",o2?2:0]);
+  c.push(["PAS",V.pas,V.pas===null?null:V.pas<=90?3:V.pas<=100?2:V.pas<=110?1:V.pas<=219?0:3]);
+  c.push(["FC",V.fc,V.fc===null?null:V.fc<=40?3:V.fc<=50?1:V.fc<=90?0:V.fc<=110?1:V.fc<=130?2:3]);
+  c.push(["Consciencia",V.gcs,V.gcs===null?null:V.gcs<15?3:0]);
+  c.push(["Temp",V.temp,V.temp===null?null:V.temp<=35?3:V.temp<=36?1:V.temp<=38?0:V.temp<=39?1:2]);
+  const known=c.filter(x=>x[2]!==null), total=known.reduce((a,x)=>a+x[2],0);
+  const red=known.some(x=>x[2]===3);
+  return {total,known:known.length,c,red,ts:V.ts,o2known:!!p.onVMA||!!fio};
+}
+/* Una foto por día para ver el cambio de ayer a hoy. Se guarda al abrir Cálculos o al marcar visto. */
+function snapScores(p){
+  const s=sofaOf(p), q=qsofaOf(p), n=news2Of(p), day=todayStr();
+  const snap={sofa:s.known?s.total:null,sofaN:s.known,qsofa:q&&q.known===3?q.total:null,news2:n&&n.known>=6?n.total:null};
+  p.scores=p.scores||{};
+  if(JSON.stringify(p.scores[day])!==JSON.stringify(snap)){ p.scores[day]=snap; save(); }
+  const prev=Object.keys(p.scores).filter(k=>k<day).sort().pop();
+  return {today:snap,prev:prev?Object.assign({day:prev},p.scores[prev]):null};
+}
+function trendTxt(now,prev,key){
+  if(!prev||prev[key]==null||now==null) return "";
+  const d=now-prev[key], dd=prev.day.split("-").reverse().slice(0,2).join("/");
+  return `${d>0?"↑ +"+d:d<0?"↓ "+d:"= sin cambio"} desde el ${dd} (${prev[key]})`;
+}
+function scaleCard(title,value,sub,st,chips,note){
+  return `<div class="ccard ${st||""}"><div class="cname">${esc(title)}</div>
+    <div class="cval">${esc(value)}</div>${sub?`<div class="csub">${esc(sub)}</div>`:""}
+    ${chips?`<div class="cins">${chips}</div>`:""}${note?`<div class="cnote">${esc(note)}</div>`:""}</div>`;
+}
+function scalesHTML(p){
+  const sn=snapScores(p), s=sofaOf(p), q=qsofaOf(p), n=news2Of(p);
+  const chip=(l,v)=>`<span class="cin"><em>${esc(l)}</em>${esc(v)}</span>`;
+  const cards=[];
+  const sofaSt=!s.known?"":s.total>=11?"bad":s.total>=2?"warn":"";
+  cards.push(scaleCard("SOFA",s.known?s.total:"—",s.known?(s.known<6?`Parcial: ${s.known} de 6 componentes · `:"")+trendTxt(s.total,sn.prev,"sofa"):"Faltan datos",sofaSt,
+    s.parts.map(x=>`<span class="cin ${x.pts===null?"na":""}" title="${esc(x.det)}"><em>${x.label}</em>${x.pts===null?"?":x.pts}<small>${esc(x.det)}</small></span>`).join(""),
+    "El renal usa solo creatinina. Un SOFA ≥ 2 sobre el basal define disfunción orgánica en sepsis."));
+  if(q) cards.push(scaleCard("qSOFA",q.known===3?q.total+" de 3":"—",q.known===3?(q.total>=2?"≥ 2: alto riesgo de mala evolución":"< 2"):`Faltan: ${q.c.filter(x=>x[1]===null).map(x=>x[0]).join(", ")}`,q.known===3&&q.total>=2?"bad":q.total===1?"warn":"",
+    q.c.map(x=>chip(x[0],x[1]===null?"?":x[1]?"sí":"no")).join(""),"Signos de "+fmtTime(q.ts)));
+  if(n){
+    const risk=n.known<7?"":n.total>=7?"Riesgo alto: respuesta de emergencia":n.total>=5||n.red?"Riesgo medio: valoración urgente":"Riesgo bajo";
+    cards.push(scaleCard("NEWS2",n.known>=7?n.total:"—",(risk||`Faltan signos (${n.known} de 7)`)+(n.known>=7&&sn.prev?" · "+trendTxt(n.total,sn.prev,"news2"):""),n.known<7?"":n.total>=7?"bad":n.total>=5||n.red?"warn":"",
+      n.c.map(x=>chip(x[0],x[2]===null?"?":x[2])).join(""),
+      (n.o2known?"":"Sin FiO₂ ni VMA: se asumió aire ambiente. ")+"Escala 1 de SpO₂ (sin hipercapnia). Signos de "+fmtTime(n.ts)));
+  } else cards.push(scaleCard("NEWS2","—","Sin signos vitales registrados","",""));
+  return `<div class="sec-title">Escalas de gravedad</div><div class="cgrid">${cards.join("")}</div>`;
+}
+
+/* ---------------- tendencias de laboratorio ---------------- */
+const SPARK_KEYS=["cr","bun","na","k","glu","leu","hb","plaq","pcr","pct","lactato","alb","bt","inr"];
+function sparkSVG(pts,st){
+  const w=120,h=34,pad=4, xs=pts.map(x=>x.ts), ys=pts.map(x=>x.n);
+  const x0=Math.min.apply(null,xs), x1=Math.max.apply(null,xs), y0=Math.min.apply(null,ys), y1=Math.max.apply(null,ys);
+  const X=t=>x1===x0?w/2:pad+(t-x0)/(x1-x0)*(w-2*pad), Y=v=>y1===y0?h/2:h-pad-(v-y0)/(y1-y0)*(h-2*pad);
+  const d=pts.map((q,i)=>(i?"L":"M")+X(q.ts).toFixed(1)+" "+Y(q.n).toFixed(1)).join(" ");
+  const last=pts[pts.length-1];
+  return `<svg class="spk ${st||""}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${X(last.ts).toFixed(1)}" cy="${Y(last.n).toFixed(1)}" r="2.8" fill="currentColor"/></svg>`;
+}
+function trendsHTML(p){
+  const cards=[];
+  SPARK_KEYS.forEach(k=>{
+    const pts=(p.labs||[]).map(r=>({ts:r.ts,n:labNum(k,r[k]),raw:r[k]})).filter(x=>x.n!==null).slice(-8);
+    if(pts.length<2) return;
+    const f=LAB_BY_KEY[k], a=pts[0], b=pts[pts.length-1], prev=pts[pts.length-2];
+    const st=labStatus(k,b.raw,p,(p.labs||[]).find(r=>r.ts===b.ts));
+    const dir=b.n>prev.n?"↑":b.n<prev.n?"↓":"→";
+    cards.push(`<div class="trend ${st}"><div class="trend-h"><span class="cname">${f.label}</span><span class="trend-v">${dir} ${esc(b.raw)}</span></div>
+      ${sparkSVG(pts,st)}<div class="trend-s">${esc(a.raw)} (${fmtShort(a.ts)}) → ${esc(b.raw)} (${fmtShort(b.ts)})</div></div>`);
+  });
+  return cards.length?`<div class="sub-title">Tendencias</div><div class="trends">${cards.join("")}</div>`:"";
+}
+
+/* ---------------- calculadora de infusiones ---------------- */
+const infCalcOpen={};
+const DOSE_UNITS=["mcg/kg/min","mcg/min","mcg/kg/h","mcg/h","mg/h","mg/kg/h","mg/min","UI/min","UI/h"];
+const DILUCIONES=[
+  {n:"Norepinefrina",a:4,u:"mg",v:250,d:"mcg/kg/min"},{n:"Vasopresina",a:20,u:"UI",v:100,d:"UI/min"},
+  {n:"Dobutamina",a:250,u:"mg",v:250,d:"mcg/kg/min"},{n:"Fentanilo",a:1000,u:"mcg",v:100,d:"mcg/kg/h"},
+  {n:"Midazolam",a:50,u:"mg",v:50,d:"mg/h"},{n:"Insulina",a:100,u:"UI",v:100,d:"UI/h"}
+];
+function doseUnit(d){ return d.amtU+(d.perKg?"/kg":"")+"/"+d.per; }
+/* Dosis por hora en la unidad base (mcg o UI), a partir de n con unidad "mcg/kg/min", etc. */
+function baseFactor(unit,kg){
+  const m=unit.match(/^(mcg|mg|UI)(\/kg)?\/(min|h)$/); if(!m) return null;
+  if(m[2]&&!kg) return null;
+  return (m[1]==="mg"?1000:1)*(m[2]?kg:1)*(m[3]==="min"?60:1);
+}
+function concBase(amt,u,vol){ return (amt*(u==="mg"?1000:1))/vol; }   // mcg/mL o UI/mL
+function infRate(p,it){
+  const d=parseDose(it.dose); if(!d||!it.amt||!it.vol) return null;
+  const f=baseFactor(doseUnit(d),pesoKg(p)); if(f===null) return null;
+  if((it.amtU==="UI")!==(d.amtU==="UI")) return null;
+  const r=d.n*f/concBase(+it.amt,it.amtU,+it.vol);
+  return isFinite(r)?Math.round(r*10)/10:null;
+}
+function openInfCalc(pid,iid){ infCalcOpen[pid]=infCalcOpen[pid]===iid?null:iid; openPanes[pid]="tx"; refresh(pid); }
+function infCalcPanel(p,it){
+  const d=parseDose(it.dose), unit=d?doseUnit(d):"mcg/kg/min", w=pesoKg(p);
+  const id=it.id, opt=(arr,sel)=>arr.map(x=>`<option ${x===sel?"selected":""}>${x}</option>`).join("");
+  return `<div class="icalc">
+    <div class="muted-note">Usa la dilución real de tu servicio. Los ejemplos son solo de referencia.</div>
+    <div class="icrow"><label>Ejemplo de dilución
+      <select onchange="icPreset('${id}',this.value)"><option value="">—</option>${DILUCIONES.map((x,i)=>`<option value="${i}">${x.n} ${x.a} ${x.u} en ${x.v} mL</option>`).join("")}</select></label></div>
+    <div class="icgrid">
+      <label>Fármaco en la bolsa<span class="icin"><input id="ica-${id}" inputmode="decimal" value="${esc(it.amt||"")}" oninput="icCalc('${id}','')">
+        <select id="icu-${id}" onchange="icCalc('${id}','')">${opt(["mg","mcg","UI"],it.amtU||"mg")}</select></span></label>
+      <label>Volumen total (mL)<input id="icv-${id}" inputmode="decimal" value="${esc(it.vol||"")}" oninput="icCalc('${id}','')"></label>
+      <label>Peso (kg)<input id="icw-${id}" inputmode="decimal" value="${w||""}" placeholder="falta en la ficha" oninput="icCalc('${id}','')"></label>
+      <label>Dosis<span class="icin"><input id="icd-${id}" inputmode="decimal" value="${d?d.n:""}" oninput="icCalc('${id}','d')">
+        <select id="icdu-${id}" onchange="icCalc('${id}','d')">${opt(DOSE_UNITS,unit)}</select></span></label>
+      <label>Velocidad (mL/h)<input id="icr-${id}" inputmode="decimal" oninput="icCalc('${id}','r')"></label>
+    </div>
+    <div class="icres" id="icres-${id}" aria-live="polite"></div>
+    <div class="add-row"><button class="btn primary sm" onclick="icSave('${p.id}','${id}')">Guardar dilución y dosis</button>
+      <button class="btn ghost sm" onclick="openInfCalc('${p.id}','${id}')">Cerrar</button></div>
+  </div>`;
+}
+function icPreset(iid,i){
+  const x=DILUCIONES[i]; if(!x) return;
+  document.getElementById("ica-"+iid).value=x.a; document.getElementById("icu-"+iid).value=x.u; document.getElementById("icv-"+iid).value=x.v;
+  document.getElementById("icdu-"+iid).value=x.d; icCalc(iid,"");
+}
+function icCalc(iid,from){
+  const g=k=>document.getElementById(k+"-"+iid), n=k=>num(g(k).value), res=g("icres");
+  const amt=n("ica"), vol=n("icv"), kg=n("icw"), unit=g("icdu").value, au=g("icu").value;
+  const fail=m=>{ res.textContent=m; res.className="icres warn"; };
+  res.className="icres";
+  if(!amt||!vol){ res.textContent="Captura la cantidad de fármaco y el volumen."; return; }
+  if((au==="UI")!==/^UI/.test(unit)) return fail("La unidad de la bolsa y la de la dosis no son compatibles.");
+  const f=baseFactor(unit,kg); if(f===null) return fail("Esa dosis es por kg: falta el peso.");
+  const c=concBase(amt,au,vol);
+  if(from==="r"||(from===""&&n("icd")===null&&n("icr")!==null)){
+    const r=n("icr"); if(r===null) return;
+    const d=r*c/f; g("icd").value=Math.round(d*1000)/1000;
+  } else {
+    const d=n("icd"); if(d===null){ res.textContent="Captura la dosis o la velocidad."; return; }
+    g("icr").value=Math.round(d*f/c*10)/10;
+  }
+  const bu=au==="UI"?"UI":"mcg";
+  res.innerHTML=`<b>${esc(g("icr").value)} mL/h</b> para ${esc(g("icd").value)} ${esc(unit)} · concentración ${Math.round(c*1000)/1000} ${bu}/mL`;
+}
+function icSave(pid,iid){
+  const p=find(pid); if(!p) return; const it=(p.infusiones||[]).find(x=>x.id===iid); if(!it) return;
+  const g=k=>document.getElementById(k+"-"+iid), amt=num(g("ica").value), vol=num(g("icv").value), d=num(g("icd").value);
+  if(!amt||!vol){ toast("Falta la dilución","err"); return; }
+  it.amt=amt; it.amtU=g("icu").value; it.vol=vol;
+  if(d!==null) it.dose=d+" "+g("icdu").value;
+  infCalcOpen[pid]=null; save(); toast("Dilución guardada","ok"); refresh(pid);
+}
+
+/* ---------------- nota de evolución (borrador) ---------------- */
+const notaDraft={};
+function notaText(p){
+  const TBD="[completar]", L=[], V=lastVitals(p), lab=(p.labs||[]).slice(-1)[0], vm=lastVMA(p);
+  const sx=sexOf(p)==="F"?"femenino":sexOf(p)==="M"?"masculino":(p.sex||"");
+  const sv=V?SV_FIELDS.filter(f=>V[f.k]).map(f=>`${f.label} ${V[f.k]}`).join(", "):"";
+  const vmaTxt=p.onVMA&&vm?VMA_FIELDS.filter(f=>vm[f.k]).map(f=>`${f.label} ${vm[f.k]}`).join(", "):"";
+  const inf=activeInf(p), meds=activeMeds(p), atb=meds.filter(isAtb), otros=meds.filter(m=>!isAtb(m));
+  const s=sofaOf(p), q=qsofaOf(p), n=news2Of(p), pam=(()=>{ const x=vitalsNums(p); return x&&x.pas!==null&&x.pad!==null?Math.round((x.pas+2*x.pad)/3):null; })();
+  L.push("DIAGNÓSTICOS");
+  L.push(p.dx||TBD);
+  L.push("","EVOLUCIÓN CLÍNICA");
+  L.push(p.presentation||`Paciente ${sx}${p.age?" de "+p.age+" años":""}${p.bed?", cama "+p.bed:""}.`);
+  if(sv) L.push(`Signos vitales (${fmtTime(V.ts)}): ${sv}.`);
+  if(vmaTxt) L.push(`Ventilación mecánica: ${vmaTxt}.`);
+  if(inf.length) L.push("Vasoactivos e infusiones: "+inf.map(i=>i.name+(i.dose?" "+i.dose:"")).join(", ")+".");
+  L.push(`Síntomas nuevos y cambios desde la última valoración: ${TBD}`);
+  L.push("","EXPLORACIÓN FÍSICA");
+  L.push(`Neurológico: ${V&&V.gcs?"Glasgow "+V.gcs+". ":""}${TBD}`);
+  L.push(`Respiratorio: ${[V&&V.sato2?"SatO₂ "+V.sato2+"%":"",V&&V.fr?"FR "+V.fr:""].filter(Boolean).join(", ")}${V&&(V.sato2||V.fr)?". ":""}${TBD}`);
+  L.push(`Cardiovascular: ${[V&&V.ta?"TA "+V.ta:"",pam?"PAM "+pam:"",V&&V.fc?"FC "+V.fc:""].filter(Boolean).join(", ")}${V&&(V.ta||V.fc)?". ":""}${TBD}`);
+  L.push(`Gastrointestinal / Metabólico: ${V&&V.gluc?"Glucosa capilar "+V.gluc+". ":""}${TBD}`);
+  L.push(`Genitourinario: ${[V&&V.diuresis?"Diuresis "+V.diuresis:"",V&&V.balance?"Balance "+V.balance:""].filter(Boolean).join(", ")}${V&&(V.diuresis||V.balance)?". ":""}${TBD}`);
+  L.push(`Extremidades: ${TBD}`);
+  L.push(`Dispositivos invasivos: ${TBD}`);
+  L.push("","PARACLÍNICOS");
+  L.push(lab?`(${fmtShort(lab.ts)}) ${labsToText(lab)}`:"Sin laboratorios registrados.");
+  const dv=lab?labDerived(lab,p):[]; if(dv.length) L.push("Cálculos: "+dv.map(x=>`${x.label} ${x.value}`).join(", ")+".");
+  const sc=[]; if(s.known) sc.push(`SOFA ${s.total}${s.known<6?" ("+s.known+" de 6 componentes)":""}`);
+  if(q&&q.known===3) sc.push(`qSOFA ${q.total}`); if(n&&n.known>=7) sc.push(`NEWS2 ${n.total}`);
+  if(sc.length) L.push("Escalas: "+sc.join(", ")+".");
+  L.push("","TRATAMIENTO ACTUAL");
+  L.push("Antibióticos: "+(atb.length?atb.map(medText).join("; "):"ninguno")+".");
+  if(otros.length) L.push("Medicamentos: "+otros.map(medText).join("; ")+".");
+  L.push("","ANÁLISIS");
+  L.push(TBD);
+  L.push("","PLAN");
+  const pend=(p.pendientes||[]).filter(x=>!x.done);
+  if(pend.length) L.push("Pendientes: "+pend.map(x=>x.text).join("; ")+".");
+  L.push(TBD);
+  L.push("","PRONÓSTICO");
+  L.push(TBD);
+  return L.join("\n");
+}
+function notaPaneHTML(p){
+  if(notaDraft[p.id]===undefined) notaDraft[p.id]=notaText(p);
+  return `<div class="muted-note" style="margin-top:8px">Borrador armado con los datos del paciente. Lo que no está registrado queda como <b>[completar]</b>; el análisis, el plan y el pronóstico son tuyos. Puedes editar aquí mismo.</div>
+    <div class="sec-title">Nota de evolución</div>
+    <textarea id="nota-${p.id}" class="pres-area nota-area" spellcheck="false" oninput="notaDraft['${p.id}']=this.value">${esc(notaDraft[p.id])}</textarea>
+    <div class="add-row" style="margin-top:8px">
+      <button class="btn primary sm" style="flex:1" onclick="copyNota('${p.id}',this)">Copiar nota</button>
+      <button class="btn ghost sm" onclick="regenNota('${p.id}')" title="Vuelve a armar el borrador con los datos actuales y descarta tus ediciones">Regenerar</button>
+    </div>`;
+}
+function regenNota(id){
+  const p=find(id); if(!p) return;
+  const cur=notaDraft[id], fresh=notaText(p);
+  if(cur&&cur!==fresh&&!confirm("Se descartarán tus ediciones de esta nota. ¿Regenerar?")) return;
+  notaDraft[id]=fresh; refresh(id);
+}
+function copyNota(id,btn){
+  const t=notaDraft[id]||""; if(!t) return;
+  const done=()=>{ if(btn){ const o=btn.textContent; btn.textContent="Copiada"; setTimeout(()=>{ btn.textContent=o; },1400); } };
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done).catch(()=>fallbackCopy(t,done));
+  else fallbackCopy(t,done);
+}
+
 function calcPaneHTML(p){
   const age=num(p.age), sex=sexOf(p), w=pesoKg(p), dw=dosingWeight(p), fio=fio2Used(p), vit=lastVitals(p);
   const R=(n,d)=>{ const f=Math.pow(10,d||0); return Math.round(n*f)/f; };
@@ -1597,6 +1913,7 @@ function calcPaneHTML(p){
   const sec=(t,cards)=>`<div class="sec-title">${t}</div><div class="cgrid">${cards.join("")}</div>`;
   const soma=somaList(p);
   return `<div class="muted-note" style="margin-top:8px">Se calcula solo con el valor más reciente de cada dato. Edad, sexo, peso y talla salen de «Editar datos»; si falta uno, la tarjeta te dice cuál.</div>
+    ${scalesHTML(p)}
     ${soma.length?`<div class="sec-title">Somatometría</div>${drvRow(soma)}`:""}
     <div class="sec-title">Dato manual</div>
     <label class="cfio">FiO₂ (%) para PaFi y SpO₂/FiO₂
@@ -1718,6 +2035,7 @@ function labsTable(p){
   const drv=labDerived(latest,p);
   return `<div class="table-wrap"><table class="labs-table"><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table></div>
     ${drv.length?`<div class="sub-title">Cálculos del último set</div>${drvRow(drv)}`:""}
+    ${trendsHTML(p)}
     <div class="add-row" style="margin-top:8px">
       <button class="btn ghost sm" style="flex:1" onclick="copyLabs('${p.id}',this)">Copiar último set en formato de nota</button>
       <button class="btn ghost sm" onclick="delLabSet('${p.id}','${latest.ts}')" title="Eliminar el set más reciente">Borrar último</button>
@@ -1746,12 +2064,14 @@ function txRow(p,it,kind){
   const atbLine=atb?`<span class="atb-line"><span class="atb-tag ${active?"":"off"}">${active?"Día "+d:(d?d+" día"+(d>1?"s":"")+" de tratamiento":"Suspendido")}</span>
         <label>Inicio <input type="date" class="atb-date" value="${esc(atbStart(it))}" max="${todayStr()}" onchange="setAtbStart('${p.id}','${it.id}',this.value)"></label>
         ${!active&&it.stop?`<span class="atb-stop">suspendido ${esc(it.stop.split("-").reverse().join("/"))}</span>`:""}</span>`:"";
+  const rate=kind==="inf"?infRate(p,it):null, open=kind==="inf"&&infCalcOpen[p.id]===it.id;
   return `<div class="item ${active?'':'done'}">
        <button class="ic ${kind==="inf"?"inf":"med"} ${active?'on':''}" onclick="toggle${tg}('${p.id}','${it.id}')" title="${active?'Suspender':'Reactivar'}">${checkSVG()}</button>
-       <div class="it">${esc(it.name)}${line?`<span class="dose">${esc(line)}</span>`:""}${atbLine}</div>
+       <div class="it">${esc(it.name)}${line?`<span class="dose">${esc(line)}${rate!==null?`<span class="rate-tag">→ ${rate} mL/h</span>`:""}</span>`:""}${atbLine}</div>
+       ${kind==="inf"?`<button class="atbbtn ${open?"on":""}" onclick="openInfCalc('${p.id}','${it.id}')" title="Calculadora de mL/h">mL/h</button>`:""}
        ${kind!=="inf"?`<button class="atbbtn ${atb?"on":""}" onclick="toggleAtb('${p.id}','${it.id}')" title="${atb?"Quitar marca de antibiótico":"Marcar como antibiótico"}">ATB</button>`:""}
        <button class="del" onclick="del${tg}('${p.id}','${it.id}')" title="Eliminar">×</button>
-     </div>`;
+     </div>${open?infCalcPanel(p,it):""}`;
 }
 function txPaneHTML(p){
   const byAct=(a,b)=>(a.active===false?1:0)-(b.active===false?1:0);
@@ -1863,7 +2183,7 @@ function reingresar(id){
 function toggleSeen(id){
   const p=find(id); if(!p) return;
   if(seenToday(p)){ p.seenDate=null; p.seenAt=null; }
-  else { p.seenDate=todayStr(); p.seenAt=new Date().toISOString(); }
+  else { p.seenDate=todayStr(); p.seenAt=new Date().toISOString(); try{ snapScores(p); }catch(e){} }
   save(); render();
 }
 function savePres(id){

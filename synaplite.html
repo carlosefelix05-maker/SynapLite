@@ -331,6 +331,11 @@
   .reccode{font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:700;letter-spacing:.06em;margin:8px 0;word-break:break-all;user-select:all}
   .trcode{font-family:ui-monospace,Menlo,monospace;font-size:28px;font-weight:700;letter-spacing:.08em;text-align:center;margin:12px 0;user-select:all}
   .hbtn.on .secdot{background:var(--success)} .secdot{width:8px;height:8px;border-radius:50%;background:var(--text-on-deep-muted);flex:none}
+  .alerts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .alert{font-size:13px;font-weight:700;line-height:1.35;padding:4px 10px;border-radius:var(--radius-md);border:1px solid var(--warning);color:var(--warning);background:var(--warning-soft);display:inline-flex;align-items:center;gap:6px}
+  .alert::before{content:"";width:7px;height:7px;background:currentColor;clip-path:polygon(50% 0,100% 100%,0 100%);flex:none}
+  .alert.bad{border-color:var(--danger);color:var(--danger);background:var(--danger-soft)} .alert.bad::before{clip-path:none;border-radius:1px}
+  .dev-due{font-size:12px;font-weight:700;color:var(--warning)}
   .add-row{display:flex;gap:8px;margin-top:10px}
   .add-row input{flex:1;background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);color:var(--text);
     height:40px;padding:0 12px;font-size:16px;min-width:0}
@@ -635,6 +640,8 @@
       <div><label for="f-peso">Peso (kg)</label><input id="f-peso" inputmode="decimal" placeholder="kg" autocomplete="off"></div>
       <div><label for="f-talla">Talla (cm)</label><input id="f-talla" inputmode="decimal" placeholder="cm" autocomplete="off"></div>
     </div>
+    <label for="f-ingreso">Fecha de ingreso</label>
+    <input id="f-ingreso" type="date" max="2100-01-01">
     <label for="f-dx">Diagnóstico principal</label>
     <input id="f-dx" placeholder="Dx" autocomplete="off">
     <div class="menu">
@@ -1477,7 +1484,9 @@ function rowHTML(p){
       ${sub?`<div class="pt-sub">${sub}</div>`:""}
       ${p.dx?`<div class="pt-dx">${esc(p.dx)}</div>`:""}
       <div class="chips">
+        ${diaHosp(p)?`<span class="chip file">Día ${diaHosp(p)}</span>`:""}
         ${critChip(p)}
+        ${(()=>{ const n=alertsOf(p).length; return n?`<span class="chip pend">${n} alerta${n>1?"s":""}</span>`:""; })()}
         ${otrosPend(p)?`<span class="chip pend">${otrosPend(p)} por reportar</span>`:""}
         ${p.alta?`<span class="chip file">Alta ${fmtShort(p.alta)}</span>`:""}
         ${!p.alta&&seen&&p.seenAt?`<span class="seen-tag">Visto ${fmtHour(p.seenAt)}</span>`:""}
@@ -1547,6 +1556,7 @@ function detailHTML(p){
       ${p.dx?`<div class="pt-dx">${esc(p.dx)}</div>`:""}
       ${p.alta?"":vitalsPreview(p)}
       <div class="chips">
+        ${diaHosp(p)?`<span class="chip file">Día ${diaHosp(p)} de hospitalización</span>`:""}
         ${critChip(p)}
         ${otrosPend(p)?`<span class="chip pend">${otrosPend(p)} estudio${otrosPend(p)>1?"s":""} por reportar</span>`:""}
         ${onV?`<span class="chip vma">● VMA</span>`:""}
@@ -1555,6 +1565,7 @@ function detailHTML(p){
         <span class="chip ${op?'pend':'pend-0'}">${op?op+" pendiente"+(op>1?"s":""):"Sin pendientes"}</span>
         ${nf?`<span class="chip file">${nf} archivo${nf>1?"s":""}</span>`:""}
       </div>
+      ${alertsHTML(p)}
       <div class="seg" role="tablist">
         ${segBtn(p,'pres','Presentación','')}
         ${segBtn(p,'sv','Signos vitales','')}
@@ -1813,9 +1824,11 @@ function infCalcPanel(p,it){
   const d=parseDose(it.dose), unit=d?doseUnit(d):"mcg/kg/min", w=pesoKg(p);
   const id=it.id, opt=(arr,sel)=>arr.map(x=>`<option ${x===sel?"selected":""}>${x}</option>`).join("");
   return `<div class="icalc">
-    <div class="muted-note">Usa la dilución real de tu servicio. Los ejemplos son solo de referencia.</div>
-    <div class="icrow"><label>Ejemplo de dilución
-      <select onchange="icPreset('${id}',this.value)"><option value="">—</option>${DILUCIONES.map((x,i)=>`<option value="${i}">${x.n} ${x.a} ${x.u} en ${x.v} mL</option>`).join("")}</select></label></div>
+    <div class="muted-note">Guarda las diluciones de tu servicio con «Guardar como mi dilución»; así quedan a un toque. Los ejemplos son solo de referencia.</div>
+    <div class="icrow"><label>Diluciones
+      <select id="icp-${id}" onchange="icPreset('${id}',this.value)"><option value="">—</option>
+        ${(state.dil&&state.dil.length)?`<optgroup label="Mis diluciones">${state.dil.map(x=>`<option value="u:${x.id}">${esc(x.n)} ${x.a} ${x.u} en ${x.v} mL</option>`).join("")}</optgroup>`:""}
+        <optgroup label="Ejemplos (verifica la tuya)">${DILUCIONES.map((x,i)=>`<option value="d:${i}">${x.n} ${x.a} ${x.u} en ${x.v} mL</option>`).join("")}</optgroup></select></label></div>
     <div class="icgrid">
       <label>Fármaco en la bolsa<span class="icin"><input id="ica-${id}" inputmode="decimal" value="${esc(it.amt||"")}" oninput="icCalc('${id}','')">
         <select id="icu-${id}" onchange="icCalc('${id}','')">${opt(["mg","mcg","UI"],it.amtU||"mg")}</select></span></label>
@@ -1827,11 +1840,13 @@ function infCalcPanel(p,it){
     </div>
     <div class="icres" id="icres-${id}" aria-live="polite"></div>
     <div class="add-row"><button class="btn primary sm" onclick="icSave('${p.id}','${id}')">Guardar dilución y dosis</button>
+      <button class="btn ghost sm" onclick="icSaveDil('${id}')" title="Queda en la lista de diluciones para cualquier paciente">Guardar como mi dilución</button>
+      <button class="btn ghost sm" onclick="icDelDil('${id}')" title="Quita de la lista la dilución seleccionada">Quitar la seleccionada</button>
       <button class="btn ghost sm" onclick="openInfCalc('${p.id}','${id}')">Cerrar</button></div>
   </div>`;
 }
-function icPreset(iid,i){
-  const x=DILUCIONES[i]; if(!x) return;
+function icPreset(iid,v){
+  const x=!v?null:v.startsWith("u:")?(state.dil||[]).find(d=>d.id===v.slice(2)):DILUCIONES[+v.slice(2)]; if(!x) return;
   document.getElementById("ica-"+iid).value=x.a; document.getElementById("icu-"+iid).value=x.u; document.getElementById("icv-"+iid).value=x.v;
   document.getElementById("icdu-"+iid).value=x.d; icCalc(iid,"");
 }
@@ -1854,6 +1869,20 @@ function icCalc(iid,from){
   const bu=au==="UI"?"UI":"mcg";
   res.innerHTML=`<b>${esc(g("icr").value)} mL/h</b> para ${esc(g("icd").value)} ${esc(unit)} · concentración ${Math.round(c*1000)/1000} ${bu}/mL`;
 }
+function icSaveDil(iid){
+  const g=k=>document.getElementById(k+"-"+iid), amt=num(g("ica").value), vol=num(g("icv").value);
+  if(!amt||!vol){ toast("Captura la cantidad y el volumen","err"); return; }
+  let name=""; state.patients.some(p=>(p.infusiones||[]).some(i=>{ if(i.id===iid){ name=i.name; return true; } return false; }));
+  const x={id:uid(),n:name||"Dilución",a:amt,u:g("icu").value,v:vol,d:g("icdu").value};
+  state.dil=(state.dil||[]).filter(d=>!(d.n===x.n&&d.a===x.a&&d.u===x.u&&d.v===x.v)); state.dil.push(x);
+  save(); toast("Dilución guardada en tu lista","ok"); const p=state.patients.find(q=>(q.infusiones||[]).some(i=>i.id===iid)); if(p) refresh(p.id);
+}
+function icDelDil(iid){
+  const sel=document.getElementById("icp-"+iid).value;
+  if(!sel.startsWith("u:")){ toast("Elige una de «Mis diluciones»","err"); return; }
+  state.dil=(state.dil||[]).filter(d=>d.id!==sel.slice(2)); save(); toast("Dilución quitada");
+  const p=state.patients.find(q=>(q.infusiones||[]).some(i=>i.id===iid)); if(p) refresh(p.id);
+}
 function icSave(pid,iid){
   const p=find(pid); if(!p) return; const it=(p.infusiones||[]).find(x=>x.id===iid); if(!it) return;
   const g=k=>document.getElementById(k+"-"+iid), amt=num(g("ica").value), vol=num(g("icv").value), d=num(g("icd").value);
@@ -1875,6 +1904,7 @@ function notaText(p){
   L.push("DIAGNÓSTICOS");
   L.push(p.dx||TBD);
   L.push("","EVOLUCIÓN CLÍNICA");
+  if(diaHosp(p)) L.push(`Día ${diaHosp(p)} de hospitalización.`);
   L.push(p.presentation||`Paciente ${sx}${p.age?" de "+p.age+" años":""}${p.bed?", cama "+p.bed:""}.`);
   if(sv) L.push(`Signos vitales (${fmtTime(V.ts)}): ${sv}.`);
   if(vmaTxt) L.push(`Ventilación mecánica: ${vmaTxt}.`);
@@ -1888,7 +1918,7 @@ function notaText(p){
   const bt=balText(p);
   L.push(`Genitourinario: ${bt?bt+" ":[V&&V.diuresis?"Diuresis "+V.diuresis:"",V&&V.balance?"Balance "+V.balance:""].filter(Boolean).join(", ")+(V&&(V.diuresis||V.balance)?". ":"")}${TBD}`);
   L.push(`Extremidades: ${TBD}`);
-  L.push(`Dispositivos invasivos: ${TBD}`);
+  L.push(`Dispositivos invasivos: ${devText(p)?devText(p)+". ":""}${TBD}`);
   L.push("","PARACLÍNICOS");
   L.push(lab?`(${fmtShort(lab.ts)}) ${labsToText(lab)}`:"Sin laboratorios registrados.");
   const dv=lab?labDerived(lab,p):[]; if(dv.length) L.push("Cálculos: "+dv.map(x=>`${x.label} ${x.value}`).join(", ")+".");
@@ -2119,6 +2149,97 @@ function copyGasInterp(id,btn){
   const t=gasInterp(rec,p);
   const done=()=>{ if(btn){ const o=btn.textContent; btn.textContent="Copiada"; setTimeout(()=>{ btn.textContent=o; },1400); } };
   if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done).catch(()=>fallbackCopy(t,done)); else fallbackCopy(t,done);
+}
+
+/* ---------------- estancia, dispositivos y alertas ---------------- */
+function diaHosp(p){
+  if(!p.ingreso||!/^\d{4}-\d{2}-\d{2}$/.test(p.ingreso)) return null;
+  const end=p.alta?dayKey(p.alta):todayStr();
+  return Math.max(1,Math.round(dayNum(end)-dayNum(p.ingreso))+1);
+}
+/* `rev` = día a partir del cual se avisa para revisar si el dispositivo sigue siendo necesario.
+   Son valores de referencia habituales; ajústalos a la política de tu hospital. */
+const DEV_TIPOS=[
+  {k:"Catéter venoso central",rev:7},{k:"Línea arterial",rev:7},{k:"Catéter periférico",rev:4},
+  {k:"Sonda Foley",rev:3},{k:"Sonda nasogástrica / orogástrica",rev:null},
+  {k:"Tubo orotraqueal",rev:null},{k:"Traqueostomía",rev:null},{k:"Sonda pleural / drenaje",rev:null},{k:"Otro",rev:null}
+];
+function devDays(d){
+  const end=d.retirado||todayStr();
+  return Math.max(1,Math.round(dayNum(end)-dayNum(d.fecha))+1);
+}
+function devRev(d){ const t=DEV_TIPOS.find(x=>x.k===d.tipo); return t?t.rev:null; }
+function addDev(id){
+  const p=find(id); if(!p) return;
+  const tipo=document.getElementById("dvt-"+id).value, nota=document.getElementById("dvn-"+id).value.trim(), f=document.getElementById("dvf-"+id).value||todayStr();
+  p.devices=p.devices||[]; p.devices.push({id:uid(),tipo,nota,fecha:f>todayStr()?todayStr():f,retirado:null});
+  openPanes[id]="tx"; save(); refresh(id);
+}
+function retireDev(pid,did){ const p=find(pid); if(!p) return; const d=(p.devices||[]).find(x=>x.id===did); if(!d) return; d.retirado=d.retirado?null:todayStr(); openPanes[pid]="tx"; save(); refresh(pid); }
+function delDev(pid,did){ const p=find(pid); if(!p) return; p.devices=(p.devices||[]).filter(x=>x.id!==did); openPanes[pid]="tx"; save(); refresh(pid); }
+function setDevDate(pid,did,v){ const p=find(pid); if(!p||!v) return; const d=(p.devices||[]).find(x=>x.id===did); if(!d) return; d.fecha=v>todayStr()?todayStr():v; if(d.retirado&&d.retirado<d.fecha) d.retirado=d.fecha; openPanes[pid]="tx"; save(); refresh(pid); }
+function devicesHTML(p){
+  const list=(p.devices||[]).slice().sort((a,b)=>(a.retirado?1:0)-(b.retirado?1:0)||(a.fecha<b.fecha?1:-1));
+  const rows=list.map(d=>{
+    const n=devDays(d), rev=devRev(d), due=!d.retirado&&rev!==null&&n>=rev;
+    return `<div class="item ${d.retirado?"done":""}"><div class="it">${esc(d.tipo)}${d.nota?` · ${esc(d.nota)}`:""}
+      <span class="atb-line"><span class="atb-tag ${d.retirado?"off":""}">${d.retirado?n+" día"+(n>1?"s":"")+" · retirado":"Día "+n}</span>
+        <label>Colocado <input type="date" class="atb-date" value="${esc(d.fecha)}" max="${todayStr()}" onchange="setDevDate('${p.id}','${d.id}',this.value)"></label>
+        ${due?`<span class="dev-due">revisar si sigue siendo necesario</span>`:""}</span></div>
+      <button class="atbbtn" onclick="retireDev('${p.id}','${d.id}')">${d.retirado?"Reponer":"Retirar"}</button>
+      <button class="del" onclick="delDev('${p.id}','${d.id}')" title="Eliminar">×</button></div>`; }).join("");
+  return `<div class="sec-title">Dispositivos</div>
+    ${rows?`<div class="items">${rows}</div>`:`<div class="muted-note">Sin dispositivos registrados.</div>`}
+    <div class="med-add">
+      <select id="dvt-${p.id}">${DEV_TIPOS.map(t=>`<option>${t.k}</option>`).join("")}</select>
+      <input id="dvn-${p.id}" placeholder="Sitio o calibre (yugular der., 7.5…)" autocomplete="off">
+      <label style="margin:0">Colocado <input type="date" id="dvf-${p.id}" value="${todayStr()}" max="${todayStr()}"></label>
+      <button class="btn primary" onclick="addDev('${p.id}')">Agregar dispositivo</button>
+    </div>`;
+}
+function devText(p){
+  const a=(p.devices||[]).filter(d=>!d.retirado); if(!a.length) return "";
+  return a.map(d=>`${d.tipo}${d.nota?" ("+d.nota+")":""} día ${devDays(d)}`).join("; ");
+}
+function cgOf(p){
+  const cr=labLatest(p,"cr"), a=num(p.age), s=sexOf(p), dw=dosingWeight(p);
+  if(!cr||a===null||!s||!dw) return null;
+  return (140-a)*dw.kg/(72*cr.n)*(s==="F"?0.85:1);
+}
+/* Alertas por paciente: lo que conviene mirar hoy sin tener que buscarlo. */
+function alertsOf(p){
+  const out=[], add=(sev,txt)=>out.push({sev,txt});
+  if(p.alta) return out;
+  // antibióticos
+  const atbs=activeMeds(p).filter(isAtb);
+  atbs.forEach(m=>{ const d=atbDays(m); if(d===null||d<3) return;
+    add(d>=14?"bad":"warn",`${m.name} día ${d}: ${d>=14?"duración prolongada, justifícala o suspende":d>=7?"valora duración y suspensión":"revisa cultivos y valora desescalar"}`); });
+  const cg=cgOf(p);
+  if(atbs.length&&cg!==null&&cg<50) add("warn",`Depuración C-G ≈ ${Math.round(cg)} mL/min: revisa el ajuste renal de ${atbs.map(m=>m.name).join(", ")}`);
+  // dispositivos
+  (p.devices||[]).filter(d=>!d.retirado).forEach(d=>{ const r=devRev(d), n=devDays(d); if(r!==null&&n>=r) add("warn",`${d.tipo} día ${n}: ¿sigue siendo necesario?`); });
+  // tendencias de laboratorio
+  const L=p.labs||[], series=k=>L.map(r=>({ts:+new Date(r.ts),n:labNum(k,r[k])})).filter(x=>x.n!==null);
+  const H=36e5;
+  const cr=series("cr"); if(cr.length>=2){
+    const last=cr[cr.length-1], base=cr.filter(x=>last.ts-x.ts>0&&last.ts-x.ts<=48*H), wk=cr.filter(x=>last.ts-x.ts>0&&last.ts-x.ts<=7*24*H);
+    const m48=base.length?Math.min.apply(null,base.map(x=>x.n)):null, m7=wk.length?Math.min.apply(null,wk.map(x=>x.n)):null;
+    if(m48!==null&&last.n-m48>=0.3) add("warn",`Cr subió ${Math.round((last.n-m48)*100)/100} mg/dL en 48 h (criterio KDIGO de lesión renal aguda)`);
+    else if(m7!==null&&last.n>=1.5*m7) add(last.n>=3*m7?"bad":"warn",`Cr ${last.n} es ≥ 1.5 veces la de la última semana (${m7}): lesión renal aguda`);
+  }
+  const hb=series("hb"); if(hb.length>=2){ const a=hb[hb.length-2], b=hb[hb.length-1]; if(b.ts-a.ts<=7*24*H&&a.n-b.n>=2) add("warn",`Hb cayó ${Math.round((a.n-b.n)*10)/10} g/dL (${a.n} → ${b.n}): busca sangrado o hemólisis`); }
+  const pl=series("plaq"); if(pl.length>=2){ const a=pl[pl.length-2], b=pl[pl.length-1], drop=a.n>0?(a.n-b.n)/a.n:0; if(b.ts-a.ts<=7*24*H&&drop>=0.3) add(drop>=0.5?"bad":"warn",`Plaquetas cayeron ${Math.round(drop*100)} % (${a.n} → ${b.n})`); }
+  const na=series("na"); if(na.length>=2){ const a=na[na.length-2], b=na[na.length-1]; if(b.ts-a.ts<=24*H&&Math.abs(b.n-a.n)>=8) add("warn",`Na cambió ${b.n>a.n?"+":""}${Math.round((b.n-a.n)*10)/10} mEq/L en ≤ 24 h: riesgo por corrección rápida`); }
+  const la=series("lactato"); if(la.length>=2){ const a=la[la.length-2], b=la[la.length-1]; if(b.ts-a.ts<=12*H&&b.n>2&&b.n-a.n>=1) add("warn",`Lactato en ascenso (${a.n} → ${b.n})`); }
+  // gravedad y diuresis
+  if(p.scores){ const days=Object.keys(p.scores).sort(), today=p.scores[todayStr()], prev=days.filter(k=>k<todayStr()).pop();
+    if(today&&prev&&today.sofa!=null&&p.scores[prev].sofa!=null&&today.sofa-p.scores[prev].sofa>=2) add("warn",`SOFA subió ${today.sofa-p.scores[prev].sofa} puntos (${p.scores[prev].sofa} → ${today.sofa})`); }
+  const bc=balLastClosed(p); if(bc&&bc.tot.rate!==null&&bc.tot.rate<0.5) add(bc.tot.rate<0.3?"bad":"warn",`Diuresis ${Math.round(bc.tot.rate*100)/100} mL/kg/h en las últimas 24 h`);
+  return out;
+}
+function alertsHTML(p){
+  const a=alertsOf(p); if(!a.length) return "";
+  return `<div class="alerts" role="list">${a.map(x=>`<span class="alert ${x.sev}" role="listitem">${esc(x.txt)}</span>`).join("")}</div>`;
 }
 
 function calcPaneHTML(p){
@@ -2445,6 +2566,7 @@ function txPaneHTML(p){
         <label>Inicio <input type="date" id="ms-${p.id}" value="${todayStr()}" max="${todayStr()}"></label></div>
       <button class="btn primary" onclick="addMed('${p.id}')">Agregar</button>
     </div>
+    ${devicesHTML(p)}
     ${meds.length?`<button class="btn ghost sm full mt" onclick="copyMeds('${p.id}',this)">Copiar esquema</button>`:""}`;
 }
 
@@ -2797,6 +2919,8 @@ function copySummary(id){
   const lab=(p.labs||[]).slice(-1)[0];
   if(lab) L.push(`Labs (${fmtShort(lab.ts)}): `+labsToText(lab));
   if((p.otros||[]).length) L.push(`Otros estudios: `+otrosText(p));
+  if(diaHosp(p)) L.push(`Día ${diaHosp(p)} de hospitalización`);
+  if(devText(p)) L.push(`Dispositivos: `+devText(p));
   const bt2=balText(p); if(bt2) L.push(`Balance: `+bt2);
   const vm=lastVMA(p);
   if(p.onVMA&&vm) L.push(`VMA: `+VMA_FIELDS.filter(f=>vm[f.k]).map(f=>`${f.label} ${vm[f.k]}`).join(", "));
@@ -2921,7 +3045,7 @@ function delFile(pid,fid){ const p=find(pid); if(!p) return; p.archivos=(p.archi
 function resetDeleteUI(){ document.getElementById("del-confirm").style.display="none"; document.getElementById("del-btn").style.display="inline-flex"; }
 function openAdd(){
   document.getElementById("sheet-title").textContent="Nuevo paciente";
-  ["id","name","bed","age","sex","att","dx","peso","talla"].forEach(k=>document.getElementById("f-"+k).value="");
+  ["id","name","bed","age","sex","att","dx","peso","talla","ingreso"].forEach(k=>document.getElementById("f-"+k).value=""); document.getElementById("f-ingreso").value=todayStr();
   document.getElementById("delete-zone").style.display="none"; resetDeleteUI();
   document.getElementById("overlay").classList.add("on");
   setTimeout(()=>document.getElementById("f-name").focus(),80);
@@ -2930,7 +3054,7 @@ function openEdit(id){
   const p=find(id); if(!p) return;
   document.getElementById("sheet-title").textContent="Editar paciente";
   document.getElementById("f-id").value=p.id;
-  ["name","bed","age","sex","att","dx","peso","talla"].forEach(k=>document.getElementById("f-"+k).value=p[k]||"");
+  ["name","bed","age","sex","att","dx","peso","talla","ingreso"].forEach(k=>document.getElementById("f-"+k).value=p[k]||"");
   document.getElementById("delete-zone").style.display="block"; resetDeleteUI();
   document.getElementById("overlay").classList.add("on");
 }
@@ -2939,7 +3063,7 @@ function askDelete(){ document.getElementById("del-btn").style.display="none"; d
 function cancelDelete(){ resetDeleteUI(); }
 function savePatient(){
   const id=document.getElementById("f-id").value;
-  const data={ name:val("f-name"),bed:val("f-bed"),age:val("f-age"),sex:val("f-sex"),att:val("f-att"),dx:val("f-dx"),peso:val("f-peso"),talla:val("f-talla") };
+  const data={ name:val("f-name"),bed:val("f-bed"),age:val("f-age"),sex:val("f-sex"),att:val("f-att"),dx:val("f-dx"),peso:val("f-peso"),talla:val("f-talla"),ingreso:val("f-ingreso") };
   if(!data.name){ document.getElementById("f-name").focus(); toast("Escribe el nombre del paciente","err"); return; }
   if(id){ Object.assign(find(id),data); }
   else{ const np={id:uid(),...data,presentation:"",seenDate:null,seenAt:null,vitals:[],labs:[],vma:[],onVMA:false,infusiones:[],medicamentos:[],pendientes:[],comentarios:[],archivos:[]}; state.patients.push(np); selectedId=np.id; }

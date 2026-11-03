@@ -771,6 +771,7 @@ const LAB_GROUPS=[
   ]},
   {g:"Gasometría", gas:true, f:[
     {k:"gtipo",label:"Tipo",ph:"arterial / venosa",a:[],text:true},
+    {k:"gfio2",label:"FiO₂",gl:"FiO₂ (gas)",ph:"%",a:["fio2","fi o2","fio 2"]},
     {k:"ph",label:"pH",ph:"",a:["ph"]},
     {k:"pco2",label:"pCO₂",ph:"mmHg",a:["pco2","paco2","pcoi"]},
     {k:"po2",label:"pO₂",ph:"mmHg",a:["po2","pao2"]},
@@ -782,10 +783,27 @@ const LAB_GROUPS=[
     {k:"so2",label:"SO₂",ph:"%",a:["so2","sato2","sat o2","saturacion"]},
     {k:"lactato",label:"Lactato",ph:"mmol/L",a:["lactato","lac","lactate"]},
     {k:"cai",label:"Ca++",ph:"mmol/L",a:["ca++","ca ++","ca+ +","ca2+","ca 2+","cai","ca i","calcio ionico","calcio ionizado","ca ionico","ca ionizado"]},
+    /* Lo demás que reporta el gasómetro. Na, K, Cl, Glu, Hb y Hto tienen clave propia (g…) para no
+       mezclarse con los de química sanguínea y biometría: `gl` es la etiqueta para formularios. */
+    {k:"gna",label:"Na",gl:"Na (gas)",ph:"mEq/L",a:["na+","gna"]},
+    {k:"gk",label:"K",gl:"K (gas)",ph:"mEq/L",a:["k+","gk"]},
+    {k:"gcl",label:"Cl",gl:"Cl (gas)",ph:"mEq/L",a:["cl-","gcl"]},
+    {k:"ggl",label:"Glu",gl:"Glu (gas)",ph:"mg/dL",a:["gglu"]},
+    {k:"ghb",label:"Hb",gl:"Hb (gas)",ph:"g/dL",a:["thb","chb","ghb"]},
+    {k:"ghto",label:"Hto",gl:"Hto (gas)",ph:"%",a:["ghto"]},
+    {k:"gag",label:"AG",gl:"AG (gas)",ph:"mEq/L",a:["anion gap","brecha anionica","gap anionico","gap"]},
+    {k:"cohb",label:"COHb",ph:"%",a:["cohb","carboxihemoglobina","hbco"]},
+    {k:"methb",label:"MetHb",ph:"%",a:["methb","metahemoglobina","mhb"]},
   ]},
 ];
 const LAB_FIELDS=LAB_GROUPS.reduce((a,g)=>a.concat(g.f),[]);
 const LAB_BY_KEY={}; LAB_FIELDS.forEach(f=>LAB_BY_KEY[f.k]=f);
+/* Etiqueta sin ambigüedad (Na del gasómetro vs. Na de química) para formularios y avisos. */
+function labTag(f){ return f.gl||f.label; }
+/* Dentro de una gasometría estas etiquetas son las del gasómetro, no las de química. */
+const GAS_SHARED={na:"gna",k:"gk",cl:"gcl",glu:"ggl",hb:"ghb",hto:"ghto",ca:"cai",ag:"gag"};
+const GAS_ONLY=new Set(["ph","pco2","po2","hco3","hco3std","tco2","beecf","beb"]);
+const GAS_PCT=new Set(["so2","gfio2","ghto","cohb","methb"]);
 /* Alias ordenados de más largo a más corto para que "acido urico" gane sobre "au". */
 const LAB_ALIASES=(()=>{
   const out=[];
@@ -916,7 +934,7 @@ function parseLabText(text){
   t=t.replace(/(\d),(?=\d)/g,"$1.");
   const gasMatch=/gasometr[ií]a\s*(arterial|venosa|capilar)?/.exec(t);
   if(gasMatch) rec.gtipo=gasMatch[1]||"";
-  t=t.replace(/gasometr[ií]a[^:,]*:/g," ");
+  t=t.replace(/gasometr[ií]a[^:,]*:/g,", @gas, ");
   /* El tabulador separa etiqueta de valor (tablas y PDF del laboratorio), no dos datos:
      va a espacio, y de partir en pares ya se encarga PAIR_SPLIT_RE. */
   t=t.replace(/\t/g," ");
@@ -924,17 +942,31 @@ function parseLabText(text){
   t=t.replace(/\.(?=\s|$)/g,", ");                   // punto de fin de oración = separador
   t=t.replace(UNIT_RE,"$1 ").replace(/\s*%/g," ");
   t=t.replace(PAIR_SPLIT_RE,"$1$2, ");               // ya sin unidades, lo que sigue es otra etiqueta
+  /* Lo que viene después de «Gasometría:» (o de un valor propio del gasómetro) es del gasómetro:
+     su Na, K, Cl, Glu, Hb y Hto se guardan aparte de los de química. */
+  let gasOn=false;
   t.split(",").forEach(chunk=>{
     const c=chunk.trim(); if(!c) return;
+    if(c==="@gas"){ gasOn=true; return; }
     const m=/^([a-z0-9¿?\/\s\.\-+]*?)\s*[:=]?\s*([<>]?\s*-?\d+(?:[.,]\d+)?)\s*$/.exec(c);
     if(!m){ if(/[a-z]/.test(c) && c.length<40) unknown.push(chunk.trim()); return; }
     const label=m[1].replace(/\s+/g," ").trim();
     const value=cleanNum(m[2]);
     if(!label) return;
     const hit=LAB_ALIASES.find(x=>x.al===label);
-    if(hit){ if(rec[hit.k]===undefined) rec[hit.k]=value; }
+    if(hit){
+      if(GAS_ONLY.has(hit.k)) gasOn=true;
+      const key=(gasOn&&GAS_SHARED[hit.k])||hit.k;
+      if(rec[key]===undefined) rec[key]=value;
+    }
     else unknown.push(chunk.trim());
   });
+  /* Una gasometría pegada sola, sin encabezado y con los electrolitos antes del pH: si no hay
+     ningún dato de química, todo lo compartido es del gasómetro. */
+  const sharedChem=new Set(Object.keys(GAS_SHARED)), gasKeys=new Set(LAB_GROUPS.find(g=>g.gas).f.map(f=>f.k));
+  if([...GAS_ONLY].some(k=>rec[k]!==undefined) && !Object.keys(rec).some(k=>!gasKeys.has(k)&&!sharedChem.has(k)&&k!=="gtipo")){
+    Object.keys(GAS_SHARED).forEach(k=>{ if(rec[k]!==undefined){ const g=GAS_SHARED[k]; if(rec[g]===undefined) rec[g]=rec[k]; delete rec[k]; } });
+  }
   if(rec.gtipo==="" ) { const anyGas=LAB_GROUPS.find(g=>g.gas).f.some(f=>f.k!=="gtipo"&&rec[f.k]); if(!anyGas) delete rec.gtipo; }
   return {rec,unknown,when:{date:when.date,time:when.time}};
 }
@@ -948,7 +980,7 @@ function labsToText(r){
   let s=out.join(", ");
   if(s) s+=".";
   const gas=LAB_GROUPS.find(g=>g.gas);
-  const gp=gas.f.filter(f=>f.k!=="gtipo"&&r[f.k]).map(f=>`${f.label} ${r[f.k]}${f.k==="so2"?"%":""}`).join(", ");
+  const gp=gas.f.filter(f=>f.k!=="gtipo"&&r[f.k]).map(f=>`${f.label} ${r[f.k]}${GAS_PCT.has(f.k)?"%":""}`).join(", ");
   if(gp) s+=(s?" ":"")+`Gasometría${r.gtipo?" "+r.gtipo:""}: ${gp}.`;
   return s;
 }
@@ -1153,6 +1185,8 @@ const LAB_REF={
   so2:{lo:94,blo:90}, lactato:{hi:2.0,bhi:4.0},
   cai:{lo:1.12,hi:1.32,blo:0.9,bhi:1.6},              // Ca++ en mmol/L; < 0.9 hipocalcemia iónica grave       // ≥ 4: Surviving Sepsis
 };
+LAB_REF.gna=LAB_REF.na; LAB_REF.gk=LAB_REF.k; LAB_REF.gcl=LAB_REF.cl; LAB_REF.ghb=LAB_REF.hb; LAB_REF.ghto=LAB_REF.hto;
+LAB_REF.cohb={hi:5,bhi:15}; LAB_REF.methb={hi:1.5,bhi:10};
 /* En gasometría venosa el pH baja y la pCO₂ sube; pO₂ y SO₂ venosas no se califican. */
 const LAB_REF_VEN={ ph:{lo:7.31,hi:7.41,blo:7.20,bhi:7.55}, pco2:{lo:41,hi:51,blo:20,bhi:75}, po2:null, so2:null };
 /* Leucocitos y plaquetas llegan a veces en absolutos (18,400 / 95,000) y no en ×10³;
@@ -1177,7 +1211,7 @@ function labRef(k,p,rec){
   return Object.assign({},r,base);
 }
 function labStatus(k,v,p,rec){
-  if(k==="glu") return svStatus("gluc",v);       // mismos cortes que la glucosa capilar
+  if(k==="glu"||k==="ggl") return svStatus("gluc",v);       // mismos cortes que la glucosa capilar
   const n=labNum(k,v); if(n===null) return "";
   const r=labRef(k,p,rec); if(!r) return "";
   if(r.blo!=null && n<r.blo) return "bad";
@@ -1188,7 +1222,7 @@ function labStatus(k,v,p,rec){
 /* Dirección respecto al rango normal: la flecha ↑/↓ de la tabla de laboratorios de Edu. */
 function labDir(k,v,p,rec){
   const n=labNum(k,v); if(n===null) return "";
-  if(k==="glu") return n>180?"hi":(n<80?"lo":"");
+  if(k==="glu"||k==="ggl") return n>180?"hi":(n<80?"lo":"");
   const r=labRef(k,p,rec); if(!r) return "";
   const hi=r.hi!=null?r.hi:r.bhi, lo=r.lo!=null?r.lo:r.blo;
   if(hi!=null&&n>hi) return "hi";
@@ -1243,7 +1277,7 @@ function labDerived(r,p){
 function critChip(p){
   const recs=p.labs||[]; if(!recs.length) return "";
   const r=recs[recs.length-1];
-  const bad=LAB_FIELDS.filter(f=>!f.text&&r[f.k]&&labStatus(f.k,r[f.k],p,r)==="bad").map(f=>f.label+" "+r[f.k]);
+  const bad=LAB_FIELDS.filter(f=>!f.text&&r[f.k]&&labStatus(f.k,r[f.k],p,r)==="bad").map(f=>labTag(f)+" "+r[f.k]);
   if(!bad.length) return "";
   const txt=bad.slice(0,3).join(" · ")+(bad.length>3?` +${bad.length-3}`:"");
   const when=dayKey(r.ts)===todayStr()?"":` (${fmtShort(r.ts)})`;
@@ -1486,6 +1520,12 @@ function fio2Used(p){
   if(n>1) n/=100;
   return n<=1?{n,src}:null;
 }
+/* La FiO₂ que reporta el gasómetro es la del momento de esa muestra: es la que va con su PaO₂. */
+function fioFor(p,rec){
+  const g=rec?num(rec.gfio2):null;
+  if(g!==null&&g>0){ const n=g>1?g/100:g; if(n<=1) return {n,src:"gasometría"}; }
+  return fio2Used(p);
+}
 function setCalcFio2(id){
   const e=document.getElementById("calc-fio2-"+id); calcFio2[id]=e?e.value.trim():"";
   refresh(id);
@@ -1539,11 +1579,11 @@ function vitalsNums(p){
   return {ts:v.ts,pas:m?+m[1]:null,pad:m?+m[2]:null,fc:num(v.fc),fr:num(v.fr),temp:num(v.temp),sat:num(v.sato2),gcs:num(v.gcs)};
 }
 function sofaOf(p){
-  const parts=[], V=vitalsNums(p), fio=fio2Used(p);
+  const parts=[], V=vitalsNums(p);
   const lab=k=>{ const x=labLatest(p,k); return x?x.n:null; };
   const add=(k,label,pts,det)=>parts.push({k,label,pts,det});
   // Respiratorio
-  const po=labLatest(p,"po2"), ven=po&&/ven/.test((po.rec.gtipo||"").toLowerCase());
+  const po=labLatest(p,"po2"), ven=po&&/ven/.test((po.rec.gtipo||"").toLowerCase()), fio=fioFor(p,po&&po.rec);
   if(po&&!ven&&fio){
     const pf=po.n/fio.n, vent=!!p.onVMA;
     add("res","Resp",pf<100&&vent?4:pf<200&&vent?3:pf<300?2:pf<400?1:0,"PaFi "+Math.round(pf)+(vent?" · VMA":""));
@@ -1633,7 +1673,8 @@ function scalesHTML(p){
 }
 
 /* ---------------- tendencias de laboratorio ---------------- */
-const SPARK_KEYS=["cr","bun","na","k","glu","leu","hb","plaq","pcr","pct","lactato","alb","bt","inr"];
+const SPARK_KEYS=["cr","bun","na","k","glu","leu","hb","plaq","pcr","pct","alb","bt","inr"];
+const GAS_SPARK=["ph","pco2","po2","hco3","lactato","cai","gna","gk","ggl","ghb"];
 function sparkSVG(pts,st){
   const w=120,h=34,pad=4, xs=pts.map(x=>x.ts), ys=pts.map(x=>x.n);
   const x0=Math.min.apply(null,xs), x1=Math.max.apply(null,xs), y0=Math.min.apply(null,ys), y1=Math.max.apply(null,ys);
@@ -1642,15 +1683,15 @@ function sparkSVG(pts,st){
   const last=pts[pts.length-1];
   return `<svg class="spk ${st||""}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${X(last.ts).toFixed(1)}" cy="${Y(last.n).toFixed(1)}" r="2.8" fill="currentColor"/></svg>`;
 }
-function trendsHTML(p){
+function trendsHTML(p,keys){
   const cards=[];
-  SPARK_KEYS.forEach(k=>{
+  keys.forEach(k=>{
     const pts=(p.labs||[]).map(r=>({ts:r.ts,n:labNum(k,r[k]),raw:r[k]})).filter(x=>x.n!==null).slice(-8);
     if(pts.length<2) return;
     const f=LAB_BY_KEY[k], a=pts[0], b=pts[pts.length-1], prev=pts[pts.length-2];
     const st=labStatus(k,b.raw,p,(p.labs||[]).find(r=>r.ts===b.ts));
     const dir=b.n>prev.n?"↑":b.n<prev.n?"↓":"→";
-    cards.push(`<div class="trend ${st}"><div class="trend-h"><span class="cname">${f.label}</span><span class="trend-v">${dir} ${esc(b.raw)}</span></div>
+    cards.push(`<div class="trend ${st}"><div class="trend-h"><span class="cname">${labTag(f)}</span><span class="trend-v">${dir} ${esc(b.raw)}</span></div>
       ${sparkSVG(pts,st)}<div class="trend-s">${esc(a.raw)} (${fmtShort(a.ts)}) → ${esc(b.raw)} (${fmtShort(b.ts)})</div></div>`);
   });
   return cards.length?`<div class="sub-title">Tendencias</div><div class="trends">${cards.join("")}</div>`:"";
@@ -1816,6 +1857,7 @@ function calcPaneHTML(p){
   const vts=vit?vit.ts:null;
   const withTs=(o)=>{ if(o.x) o.x.ts=vts; return o; };
   const alb=labLatest(p,"alb");
+  const poL=labLatest(p,"po2"), gfiU=fioFor(p,poL&&poL.rec), gfi=pat(gfiU?gfiU.n:null,"FiO₂",gfiU?Math.round(gfiU.n*100)+"% ("+gfiU.src+")":null);
 
   const renal=[
     calcCard("TFGe · CKD-EPI 2021","142 × min(Cr/κ,1)^α × max(Cr/κ,1)^-1.2 × 0.9938^edad (× 1.012 si mujer)",[lab("cr","Cr"),edad,sx],(cr,a,f)=>{
@@ -1835,12 +1877,12 @@ function calcPaneHTML(p){
   ];
 
   const resp=[
-    calcCard("PaFi (PaO₂ / FiO₂)","PaO₂ ÷ FiO₂",[lab("po2","pO₂"),fi],(po,f)=>{
+    calcCard("PaFi (PaO₂ / FiO₂)","PaO₂ ÷ FiO₂",[lab("po2","pO₂"),gfi],(po,f)=>{
       const g=Math.round(po/f), tipo=(labLatest(p,"po2").rec.gtipo||"").toLowerCase();
       return {v:g,u:"mmHg",sub:g<=100?"Grave (Berlín)":g<=200?"Moderado (Berlín)":g<=300?"Leve (Berlín)":"> 300",st:g<=200?"bad":g<=300?"warn":"",
         note:/ven/.test(tipo)?"La gasometría es venosa: la PaFi sólo aplica a sangre arterial.":""};
     }),
-    calcCard("Gradiente A-a de O₂ · Los Mochis ("+ALT_M+" msnm)","FiO₂ × (Patm − 47) − pCO₂ ÷ 0.8 − PaO₂; Patm = "+PATM+" mmHg; esperado = edad ÷ 4 + 4",[lab("po2","pO₂"),lab("pco2","pCO₂"),fi,edad],(po,pc,f,a)=>{
+    calcCard("Gradiente A-a de O₂ · Los Mochis ("+ALT_M+" msnm)","FiO₂ × (Patm − 47) − pCO₂ ÷ 0.8 − PaO₂; Patm = "+PATM+" mmHg; esperado = edad ÷ 4 + 4",[lab("po2","pO₂"),lab("pco2","pCO₂"),gfi,edad],(po,pc,f,a)=>{
       const pa=f*(PATM-47)-pc/0.8, g=R(pa-po,1), esp=R(a/4+4,1), tipo=(labLatest(p,"po2").rec.gtipo||"").toLowerCase();
       return {v:g,u:"mmHg",sub:"PAO₂ "+R(pa,1)+" · esperado para la edad ≈ "+esp,st:g>esp+20?"bad":g>esp?"warn":"",
         note:/ven/.test(tipo)?"La gasometría es venosa: el gradiente sólo aplica a sangre arterial.":(f>0.3?"Con FiO₂ alta el gradiente normal sube (≈ 5–7 mmHg por cada 10 % de FiO₂).":"")};
@@ -1957,7 +1999,7 @@ function formGroups(groups,prefix,id){
 }
 function formGrid(fields,prefix,id){
   return `<div class="form-grid">`+fields.map(f=>
-    `<label>${f.label}<input id="${prefix}-${id}-${f.k}" placeholder="${f.ph}" inputmode="${f.im||'decimal'}" autocomplete="off"></label>`
+    `<label>${prefix==="lab"?labTag(f):f.label}<input id="${prefix}-${id}-${f.k}" placeholder="${f.ph}" inputmode="${f.im||'decimal'}" autocomplete="off"></label>`
   ).join("")+`</div>`;
 }
 
@@ -1982,7 +2024,7 @@ function labsPaneHTML(p){
       <div class="pv-head">${hits.length} valor${hits.length===1?"":"es"} reconocido${hits.length===1?"":"s"}${d.parsed.rec.gtipo?` · gasometría ${esc(d.parsed.rec.gtipo)}`:""}</div>
       ${(d.parsed.when&&(d.parsed.when.date||d.parsed.when.time))?`<div class="pv-head" style="margin-top:8px;color:var(--success)">Fecha detectada: ${d.parsed.when.date?labDateLabel(p.id):"hoy"}${d.parsed.when.time?" · "+esc(d.parsed.when.time):""}</div>`:`<div class="muted-note">No se encontró fecha ni hora en el párrafo; se usará la del campo «Fecha del set».</div>`}
       ${hits.length?`<div class="pv-chips">${hits.map(f=>{ const v=d.parsed.rec[f.k], st=labStatus(f.k,v,p,d.parsed.rec), dir=st?labDir(f.k,v,p,d.parsed.rec):"";
-        return `<span class="pvc ${st}"><em>${f.label}</em><span class="num ${dir}">${esc(v)}</span></span>`; }).join("")}</div>`:`<div class="muted-note">No se reconoció ningún valor. Revisa que cada dato venga como “Etiqueta valor”.</div>`}
+        return `<span class="pvc ${st}"><em>${labTag(f)}</em><span class="num ${dir}">${esc(v)}</span></span>`; }).join("")}</div>`:`<div class="muted-note">No se reconoció ningún valor. Revisa que cada dato venga como “Etiqueta valor”.</div>`}
       ${d.parsed.unknown.length?`<div class="pv-warn">Sin reconocer: ${esc(d.parsed.unknown.slice(0,12).join(" · "))}</div>
         <button class="btn ghost sm mt" onclick="unknownToOtros('${p.id}')">Guardar lo no reconocido en «Otros estudios»</button>`:""}
       ${hits.length?`<button class="btn primary full mt" onclick="commitLabs('${p.id}')">Guardar set del <span class="js-labdate-btn">${labDateLabel(p.id)}</span>${labTime[p.id]?" · "+labTime[p.id]:""}</button>`:""}
@@ -2001,7 +2043,7 @@ function labsPaneHTML(p){
       <span class="stamp">Si el párrafo trae fecha y hora, se llenan solas al pulsar «Acomodar».</span>
     </div>
     <div class="sec-title">Pegar laboratorios</div>
-    <textarea id="paste-${p.id}" class="pres-area" style="min-height:96px" placeholder="Pega el párrafo tal cual: Glu 118, Ure 62, Bun 29, Cr 1.8, Na 138, K 3.2… Gasometría arterial: pH 7.31, pCO₂ 30, HCO₃ 15, Lactato 2.4.">${esc(d.text)}</textarea>
+    <textarea id="paste-${p.id}" class="pres-area" style="min-height:96px" placeholder="Pega el párrafo tal cual: Glu 118, Ure 62, Bun 29, Cr 1.8, Na 138, K 3.2… Gasometría arterial: pH 7.31, pCO₂ 30, HCO₃ 15, Lactato 2.4, Na 138, K 3.8, Cl 104, Glu 120, Hb 9.1.">${esc(d.text)}</textarea>
     <div class="add-row" style="margin-top:8px">
       <button class="btn primary sm" style="flex:1" onclick="previewLabs('${p.id}')">Acomodar</button>
       <button class="btn ghost sm" onclick="clearLabDraft('${p.id}')">Limpiar</button>
@@ -2012,30 +2054,56 @@ function labsPaneHTML(p){
       <button class="btn primary full mt" onclick="saveLabs('${p.id}')">Guardar set capturado</button>`:`<div class="muted-note">Úsala solo para corregir o completar un valor suelto.</div>`}`;
 }
 
-function labsTable(p){
-  const recs=(p.labs||[]);
-  if(!recs.length) return `<div class="muted-note">Sin laboratorios. Pega el primer set abajo.</div>`;
+/* Una tabla de comparación (columnas = sets, más reciente primero) para los grupos dados. */
+function labGridHTML(p,recs,groups,gas){
   const show=recs.slice(-6).reverse();
-  const header=`<th>Lab</th>`+show.map((r,i)=>`<th class="${i===0?'now':''}"><button class="thdate" onclick="editLabDate('${p.id}','${r.ts}')" title="Cambiar fecha o eliminar este set">${fmtShort(r.ts)}${r.hasTime?`<span style="display:block;font-size:10px;font-weight:400;letter-spacing:0">${fmtHour(r.ts)}</span>`:""}</button></th>`).join("");
+  const header=`<th>${gas?"Gasometría":"Lab"}</th>`+show.map((r,i)=>`<th class="${i===0?'now':''}"><button class="thdate" onclick="editLabDate('${p.id}','${r.ts}')" title="Cambiar fecha o eliminar este set">${fmtShort(r.ts)}${r.hasTime?`<span style="display:block;font-size:10px;font-weight:400;letter-spacing:0">${fmtHour(r.ts)}</span>`:""}${gas&&r.gtipo?`<span style="display:block;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase">${esc(r.gtipo.slice(0,4))}</span>`:""}</button></th>`).join("");
   let body="";
-  LAB_GROUPS.forEach(g=>{
+  groups.forEach(g=>{
     const fields=g.f.filter(f=>!f.text && show.some(r=>r[f.k]));
     if(!fields.length) return;
-    body+=`<tr class="grp"><td class="lname">${g.g}</td><td colspan="${show.length}"></td></tr>`;
+    if(!gas) body+=`<tr class="grp"><td class="lname">${g.g}</td><td colspan="${show.length}"></td></tr>`;
     body+=fields.map(f=>`<tr><td class="lname">${f.label}</td>`+show.map((r,i)=>{
       if(!r[f.k]) return `<td class="${i===0?'now':'old'}">—</td>`;
       const st=labStatus(f.k,r[f.k],p,r);
       const dir=st?labDir(f.k,r[f.k],p,r):"";
-      const delta=(i===0&&show[1]&&show[1][f.k])?deltaText(f.k,r[f.k],show[1][f.k]):"";   // vs. el set anterior
+      const delta=(i===0&&show[1]&&show[1][f.k]&&(!gas||(show[1].gtipo||"")===(r.gtipo||"")))?deltaText(f.k,r[f.k],show[1][f.k]):"";   // vs. el set anterior
       return `<td class="${i===0?'now':'old'}"><span class="num ${st} ${dir}">${esc(r[f.k])}</span>${delta}</td>`;
     }).join("")+`</tr>`).join("");
   });
-  if(!body) return `<div class="muted-note">Sin valores para comparar.</div>`;
-  const latest=show[0];
-  const drv=labDerived(latest,p);
-  return `<div class="table-wrap"><table class="labs-table"><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table></div>
+  if(!body) return "";
+  return {html:`<div class="table-wrap"><table class="labs-table"><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table></div>`,latest:show[0]};
+}
+/* Cálculos con lo que reporta el gasómetro; si trae su propia FiO₂ se usa esa. */
+function gasDerived(r,p){
+  const out=[], n=k=>labNum(k,r[k]);
+  const na=n("gna"), cl=n("gcl"), hco=n("hco3")!==null?n("hco3"):n("tco2"), art=!/ven/.test(norm(r.gtipo||""));
+  if(n("gag")===null && na!==null&&cl!==null&&hco!==null){ const ag=Math.round((na-cl-hco)*10)/10; out.push({label:"AG calculada",value:ag+" mEq/L",st:agSt(ag)}); }
+  const fio=fioFor(p,r), po=n("po2");
+  if(art&&po!==null&&fio){
+    const pf=Math.round(po/fio.n); out.push({label:"PaFi",value:pf+" mmHg",st:pf<=200?"bad":pf<=300?"warn":""});
+    const pc=n("pco2"); if(pc!==null){ const aa=Math.round((fio.n*(PATM-47)-pc/0.8-po)*10)/10; out.push({label:"Gradiente A-a",value:aa+" mmHg"}); }
+  }
+  return out;
+}
+function labsTable(p){
+  const recs=(p.labs||[]);
+  if(!recs.length) return `<div class="muted-note">Sin laboratorios. Pega el primer set abajo.</div>`;
+  const chemG=LAB_GROUPS.filter(g=>!g.gas), gasG=LAB_GROUPS.filter(g=>g.gas);
+  const has=(r,gs)=>gs.some(g=>g.f.some(f=>!f.text&&r[f.k]));
+  const chemRecs=recs.filter(r=>has(r,chemG)), gasRecs=recs.filter(r=>has(r,gasG));
+  const chem=chemRecs.length?labGridHTML(p,chemRecs,chemG,false):"";
+  const gas=gasRecs.length?labGridHTML(p,gasRecs,gasG,true):"";
+  if(!chem&&!gas) return `<div class="muted-note">Sin valores para comparar.</div>`;
+  const latest=recs[recs.length-1];
+  const drv=chem?labDerived(chem.latest,p):[];
+  const gdrv=gas?gasDerived(gas.latest,p):[];
+  return `${chem?`${chem.html}
     ${drv.length?`<div class="sub-title">Cálculos del último set</div>${drvRow(drv)}`:""}
-    ${trendsHTML(p)}
+    ${trendsHTML(p,SPARK_KEYS)}`:`<div class="muted-note">Sin química ni biometría registradas; solo gasometría.</div>`}
+    ${gas?`<div class="sec-title">Gasometría <span class="stamp">${gas.latest.gtipo?esc(gas.latest.gtipo)+" · ":""}${fmtTime(gas.latest.ts)}</span></div>${gas.html}
+    ${gdrv.length?`<div class="sub-title">Cálculos de la gasometría</div>${drvRow(gdrv)}`:""}
+    ${trendsHTML(p,GAS_SPARK)}`:`<div class="sec-title">Gasometría</div><div class="muted-note">Sin gasometrías. Pégala con el encabezado «Gasometría arterial:» y todo lo que sigue se toma como del gasómetro (pH, gases, electrolitos, glucosa, lactato, Hb…).</div>`}
     <div class="add-row" style="margin-top:8px">
       <button class="btn ghost sm" style="flex:1" onclick="copyLabs('${p.id}',this)">Copiar último set en formato de nota</button>
       <button class="btn ghost sm" onclick="delLabSet('${p.id}','${latest.ts}')" title="Eliminar el set más reciente">Borrar último</button>

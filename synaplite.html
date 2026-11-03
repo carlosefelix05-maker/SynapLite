@@ -533,6 +533,8 @@
   .dhead .pt-dx{font-size:17px;margin-top:4px}
   .dhead .sv-preview{margin-top:12px}
   .dhead .chips{margin-top:10px}
+  .pmore-wrap,.pbar{display:none}
+  .row-btns{display:flex;gap:8px}
   .fb-back{display:none;align-items:center;gap:4px;font-size:14px;font-weight:700;color:var(--primary-strong);background:var(--surface);
     border:1.5px solid var(--border-strong);border-radius:var(--radius-md);height:36px;padding:0 12px 0 8px}
   .fb-back svg{width:18px;height:18px}
@@ -576,11 +578,52 @@
     .main{display:none}
     body.has-sel .side{display:none}
     body.has-sel .main{display:flex}
-    .fb-back{display:inline-flex}
+    .fb-back{display:inline-flex;order:1;min-height:44px}
     .head{padding:0 16px}
     .hbtn .lbl{display:none}
-    .hbtn{width:36px;padding:0;justify-content:center}
-    .dhead{padding:12px 16px 0}
+    .hbtn{width:44px;height:44px;padding:0;justify-content:center}
+    .dhead{padding:8px 16px 0}
+    /* encabezado compacto: atrás + ⋯ arriba, nombre debajo; las acciones van abajo */
+    .dhead-top{gap:4px 8px}
+    .pmore-wrap{display:block;position:relative;order:2;margin-left:auto}
+    .pmore{width:44px;height:44px;border-radius:var(--radius-md);border:1.5px solid var(--border-strong);background:var(--surface);color:var(--primary-strong);display:grid;place-items:center;padding:0}
+    .pmore svg{width:22px;height:22px}
+    .pmenu{top:calc(100% + 6px);min-width:220px}
+    .dtitle{order:3;flex:1 1 100%}
+    .dactions{display:none}
+    .dhead .pt-sub{margin-top:2px;font-size:14px}
+    .dhead .pt-dx{font-size:16px}
+    .dhead .sv-preview{margin-top:8px}
+    .dhead .chips{margin-top:8px}
+    .main.compact .dhead .pt-sub,.main.compact .dhead .pt-dx,.main.compact .dhead .sv-preview,.main.compact .dhead .chips,.main.compact .dhead .alerts-bar,.main.compact .dhead .alerts-wrap,.main.compact .dhead .sbar{display:none}
+    .main.compact .dtitle .pt-name{font-size:18px}
+    .main.compact .dhead{padding-bottom:0}
+    /* barra inferior: visto + anterior/siguiente al alcance del pulgar */
+    .pbar{display:flex;flex:none;align-items:center;gap:8px;padding:8px 16px calc(8px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--border)}
+    .pbar .btn{height:48px;flex:1;position:relative}
+    .pbar .arrow{width:48px;height:48px;flex:none}
+    .pbar-pos{font-size:12px;font-weight:700;opacity:.75;margin-left:8px;font-variant-numeric:tabular-nums}
+    .pane-area{padding-bottom:16px}
+    /* aviso de respaldo: una línea; el detalle queda para el menú Más */
+    .sbar-more{display:none}
+    #bkbar .sbar,#storagebar .sbar{padding:6px 12px;gap:8px;flex-wrap:nowrap;font-size:13px}
+    #bkbar .sbar-msg,#storagebar .sbar-msg{flex:1 1 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #bkbar .link{white-space:nowrap;min-height:36px;padding:0 4px}
+    body.has-sel #bkbar .sbar.soft{display:none}
+    /* pestañas: degradado en el borde que se puede deslizar */
+    .seg.fade-r,.subseg.fade-r{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent)}
+    .seg.fade-l,.subseg.fade-l{-webkit-mask-image:linear-gradient(to left,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(to left,#000 calc(100% - 32px),transparent)}
+    .seg.fade-l.fade-r,.subseg.fade-l.fade-r{-webkit-mask-image:linear-gradient(to right,transparent,#000 32px,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(to right,transparent,#000 32px,#000 calc(100% - 32px),transparent)}
+    /* áreas táctiles de 44 px */
+    .btn,.btn.sm{height:44px}
+    .tab{height:40px;padding:0 14px}
+    .subseg button{min-height:40px}
+    .seg button{min-height:46px}
+    .arrow{width:44px;height:44px}
+    .item .del,.cmt .del{min-width:44px;min-height:44px;display:grid;place-items:center}
+    .prow .check{width:32px;height:32px}
+    .form-grid input,select{min-height:44px}
+    .form-grid{gap:12px 10px}
     .seg{margin:10px -16px 0;padding:0 16px}
     .pane-area{padding:4px 16px 32px}
     .dtitle .pt-name{font-size:22px}
@@ -1572,7 +1615,10 @@ function renderDetail(){
   main.innerHTML=detailHTML(p);
   main.dataset.pid=p.id;
   const pa=main.querySelector(".pane-area"); if(pa) pa.scrollTop=keep;
+  if(!pa||keep<8) main.classList.remove("compact");
+  main.dataset.pid=p.id; syncCompact(); tabHints();
 }
+(function(){ const m=document.getElementById("main"); if(m) m.addEventListener("scroll",e=>{ if(e.target.classList&&e.target.classList.contains("pane-area")) syncCompact(); },true); })();
 
 /* Re-pinta censo y detalle de un paciente; conserva el scroll */
 function refresh(id){
@@ -1597,6 +1643,14 @@ function detailHTML(p){
           ${p.bed?`<span class="bedchip" aria-label="Cama ${esc(p.bed)}">${esc(p.bed)}</span>`:""}
           <span class="pt-name">${esc(p.name)||"(sin nombre)"}</span>
           ${seen&&p.seenAt?`<span class="seen-tag">Visto ${fmtHour(p.seenAt)}</span>`:""}
+        </div>
+        <div class="pmore-wrap">
+          <button class="pmore" onclick="ptMenuToggle(event)" aria-haspopup="menu" aria-expanded="false" aria-label="Más acciones del paciente"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+          <div class="more-pop pmenu" id="ptMenu" role="menu" hidden>
+            <button role="menuitem" onclick="ptMenuClose();openEdit('${p.id}')"><span class="mt">Editar datos</span></button>
+            <button role="menuitem" onclick="ptMenuClose();copySummary('${p.id}')"><span class="mt">Copiar resumen</span></button>
+            ${p.alta?"":`<button role="menuitem" onclick="ptMenuClose();darAlta('${p.id}')"><span class="mt">Dar de alta</span></button>`}
+          </div>
         </div>
         <div class="dactions">
           <button class="btn ghost sm" onclick="openEdit('${p.id}')">Editar datos</button>
@@ -1630,7 +1684,45 @@ function detailHTML(p){
       </div>
       ${subTabs(p,{nl,ai,am,op,nc,nf,onV})}
     </div>
-    <div class="pane-area"><div class="pane active">${(panes[pane]||presPaneHTML)(p)}</div></div>`;
+    <div class="pane-area"><div class="pane active">${(panes[pane]||presPaneHTML)(p)}</div></div>
+    <div class="pbar">
+      <button class="arrow" onclick="navStep(-1)" ${i<=0?"disabled":""} aria-label="Paciente anterior">${ARROW_L}</button>
+      ${p.alta
+        ?`<button class="btn primary grow" onclick="reingresar('${p.id}')">Reingresar paciente</button>`
+        :`<button class="btn primary grow ${seen?"seen":""}" onclick="toggleSeen('${p.id}')">${seen?"✓ Visto hoy":"Marcar visto"}<span class="pbar-pos">${i>=0?`${i+1}/${L.length}`:""}</span></button>`}
+      <button class="arrow" onclick="navStep(1)" ${i<0||i>=L.length-1?"disabled":""} aria-label="Paciente siguiente">${ARROW_R}</button>
+    </div>`;
+}
+
+/* Menú ⋯ del paciente (teléfono): las acciones secundarias salen del encabezado. */
+function ptMenuToggle(ev){
+  if(ev) ev.stopPropagation();
+  const m=document.getElementById("ptMenu"); if(!m) return;
+  const open=m.hidden; m.hidden=!open;
+  const b=m.parentElement.querySelector(".pmore"); if(b) b.setAttribute("aria-expanded",String(open));
+  if(open){ const f=m.querySelector("button"); if(f) f.focus(); }
+}
+function ptMenuClose(){ const m=document.getElementById("ptMenu"); if(!m||m.hidden) return; m.hidden=true; const b=m.parentElement.querySelector(".pmore"); if(b) b.setAttribute("aria-expanded","false"); }
+document.addEventListener("click",e=>{ if(!(e.target.closest&&e.target.closest(".pmore-wrap"))) ptMenuClose(); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ const m=document.getElementById("ptMenu"); if(m&&!m.hidden){ ptMenuClose(); e.stopImmediatePropagation(); } } });
+
+/* Teléfono: al bajar en un paciente, el encabezado se contrae para dejar espacio al contenido. */
+const phoneMQ=window.matchMedia?window.matchMedia("(max-width:899px)"):{matches:false};
+function syncCompact(){
+  const main=document.getElementById("main"), pa=main&&main.querySelector(".pane-area"); if(!pa) return;
+  if(!phoneMQ.matches){ main.classList.remove("compact"); return; }
+  const room=pa.scrollHeight-pa.clientHeight, on=main.classList.contains("compact");
+  if(!on&&pa.scrollTop>60&&room>240) main.classList.add("compact");
+  else if(on&&pa.scrollTop<8) main.classList.remove("compact");
+}
+/* Pistas de desplazamiento en las pestañas y centrado de la activa */
+function tabHints(){
+  document.querySelectorAll("#main .seg,#main .subseg").forEach(s=>{
+    const act=s.querySelector(".active");
+    if(act&&!s.dataset.cx){ s.dataset.cx="1"; s.scrollLeft=Math.max(0,act.offsetLeft-(s.clientWidth-act.offsetWidth)/2); }
+    const upd=()=>{ s.classList.toggle("fade-l",s.scrollLeft>4); s.classList.toggle("fade-r",s.scrollLeft+s.clientWidth<s.scrollWidth-4); };
+    upd(); s.onscroll=upd;
+  });
 }
 
 /* Pestañas en dos niveles: 5 grupos arriba y, dentro de cada grupo, sus secciones. */
@@ -2539,6 +2631,17 @@ function calcPaneHTML(p){
 function presPaneHTML(p){
   const txt=p.presentation||"";
   const soma=somaList(p);
+  if(phoneMQ.matches){
+    const editing=!txt||presEdit[p.id];
+    return `<div class="sec-title">Somatometría</div>
+    ${soma.length?drvRow(soma):`<div class="muted-note">Sin peso ni talla. Agrégalos en “Editar datos” y la app calcula peso predicho, Vt/kg, diuresis en mL/kg/h y depuración.</div>`}
+    <div class="sec-title">Presentación del paciente</div>
+    ${editing
+      ?`<textarea id="pres-${p.id}" class="pres-area" placeholder="Resumen del paciente: motivo de ingreso, antecedentes, resumen clínico, evolución…">${esc(txt)}</textarea>
+        <div class="row-btns mt"><button class="btn primary grow" onclick="savePres('${p.id}')">Guardar presentación</button>${txt?`<button class="btn ghost" onclick="presEditSet('${p.id}',false)">Cancelar</button>`:""}</div>`
+      :`<div class="pres-read">${esc(txt)}</div>
+        <button class="btn ghost full mt" onclick="presEditSet('${p.id}',true)">Editar presentación</button>`}`;
+  }
   return `<div class="sec-title">Somatometría</div>
     ${soma.length?drvRow(soma):`<div class="muted-note">Sin peso ni talla. Agrégalos en “Editar datos” y la app calcula peso predicho, Vt/kg, diuresis en mL/kg/h y depuración.</div>`}
     <div class="sec-title">Presentación del paciente</div>
@@ -2828,8 +2931,10 @@ function toggleSeen(id){
   else { p.seenDate=todayStr(); p.seenAt=new Date().toISOString(); try{ snapScores(p); }catch(e){} }
   save(); render();
 }
+const presEdit={};
+function presEditSet(id,on){ presEdit[id]=on; refresh(id); if(on){ const t=document.getElementById("pres-"+id); if(t) t.focus(); } }
 function savePres(id){
-  const p=find(id); if(!p) return;
+  const p=find(id); if(!p) return; presEdit[id]=false;
   const el=document.getElementById(`pres-${id}`); p.presentation=el?el.value:"";
   openPanes[id]="pres"; if(save()) toast("Presentación guardada","ok"); refresh(id);
 }
@@ -3651,8 +3756,8 @@ function bkPaint(){
   let html="";
   if(on&&BK.state==="permiso") html=`<div class="sbar warn">${EDU_ICON.alerta}<span class="sbar-msg">El respaldo automático necesita tu autorización para escribir en la carpeta «${esc(c.dirName)}».</span><button class="link" onclick="bkAuthorize()">Autorizar</button></div>`;
   else if(on&&c.lastError) html=`<div class="sbar err">${EDU_ICON.alerta}<span class="sbar-msg">Falló el respaldo automático: ${esc(c.lastError)}</span><button class="link" onclick="bkOpen()">Revisar</button></div>`;
-  else if(!on&&!BK.skip&&state.patients.length&&bkSupported()&&!(c&&c.dir)) html=`<div class="sbar warn">${EDU_ICON.alerta}<span class="sbar-msg">Sin respaldo automático: si se borran los datos del navegador, se pierden los pacientes.</span><button class="link" onclick="bkOpen()">Configurar</button><button class="link" onclick="bkLater()">Ahora no</button></div>`;
-  else if(!bkSupported()&&!BK.skip&&bkDue()) html=`<div class="sbar warn">${EDU_ICON.alerta}<span class="sbar-msg">Falta la copia de hoy. Este navegador no puede guardarla sola.</span><button class="link" onclick="bkDownloadToday()">Descargar copia</button><button class="link" onclick="bkLater()">Ahora no</button></div>`;
+  else if(!on&&!BK.skip&&state.patients.length&&bkSupported()&&!(c&&c.dir)) html=`<div class="sbar warn soft">${EDU_ICON.alerta}<span class="sbar-msg"><b>Sin respaldo automático</b><span class="sbar-more">: si se borran los datos del navegador, se pierden los pacientes.</span></span><button class="link" onclick="bkOpen()">Configurar</button><button class="link" onclick="bkLater()">Ahora no</button></div>`;
+  else if(!bkSupported()&&!BK.skip&&bkDue()) html=`<div class="sbar warn">${EDU_ICON.alerta}<span class="sbar-msg"><b>Falta la copia de hoy</b><span class="sbar-more">. Este navegador no puede guardarla sola.</span></span><button class="link" onclick="bkDownloadToday()">Descargar copia</button><button class="link" onclick="bkLater()">Ahora no</button></div>`;
   if(el.innerHTML!==html) el.innerHTML=html;
 }
 function bkOpen(){ bkPaintSheet(); document.getElementById("bk-ov").classList.add("on"); }

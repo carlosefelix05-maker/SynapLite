@@ -314,6 +314,9 @@
   .balform input,.balform select{font:inherit;font-size:16px;color:var(--text);background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);padding:8px 10px;min-height:44px;min-width:0;width:100%}
   @media (max-width:640px){ .balform{grid-template-columns:1fr 1fr} }
   .interp{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--primary-strong);border-radius:var(--radius-md);padding:12px 14px;font-size:15px;line-height:1.55}
+  .bk-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--border);font-size:15px}
+  .bk-row span{color:var(--text-muted)} .bk-row input{font:inherit;background:var(--surface);color:var(--text);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);padding:6px 10px}
+  .hbtn.on .bkdot{background:var(--success)} .bkdot{width:8px;height:8px;border-radius:50%;background:var(--text-on-deep-muted);flex:none}
   .add-row{display:flex;gap:8px;margin-top:10px}
   .add-row input{flex:1;background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);color:var(--text);
     height:40px;padding:0 12px;font-size:16px;min-width:0}
@@ -544,6 +547,7 @@
           </div>
         </div>
         <div class="head-actions">
+          <button class="hbtn" id="bkBtn" onclick="bkOpen()" title="Respaldo automático diario" aria-label="Respaldo automático"><span class="bkdot"></span><span class="lbl">Respaldo</span></button>
           <button class="hbtn" onclick="exportData()" title="Exportar copia de seguridad" aria-label="Exportar copia">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 20h16"/></svg><span class="lbl">Exportar</span>
           </button>
@@ -556,6 +560,7 @@
       </div>
     </header>
     <div id="storagebar"></div>
+    <div id="bkbar"></div>
   </div>
 
   <div class="shell">
@@ -641,6 +646,14 @@
       <button class="btn ghost" style="flex:1" onclick="closeConfirm()">Cancelar</button>
       <button class="btn danger" style="flex:1.2" id="confirm-ok">Continuar</button>
     </div>
+  </div>
+</div>
+
+<div class="overlay" id="bk-ov">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="bk-title" style="max-width:460px">
+    <h3 id="bk-title">Respaldo automático diario</h3>
+    <div id="bk-body"></div>
+    <div class="mt" style="text-align:center"><button class="link" onclick="bkClose()">Cerrar</button></div>
   </div>
 </div>
 
@@ -1297,7 +1310,7 @@ function render(){
   }
   if(selectedId && !find(selectedId)) selectedId=null;
   document.body.classList.toggle("has-sel",!!selectedId);
-  renderSummary(); renderList(); renderDetail();
+  renderSummary(); renderList(); renderDetail(); bkPaint();
 }
 
 function renderSummary(){
@@ -2888,6 +2901,114 @@ function askConfirm(title,msg,okLabel,cb){
 function closeConfirm(){ document.getElementById("confirm-ov").classList.remove("on"); confirmCb=null; }
 
 /* ---------------- respaldo ---------------- */
+/* ---------------- respaldo automático diario ---------------- */
+/* Se elige una carpeta una sola vez (File System Access, Chrome/Edge). A la hora fijada la app
+   escribe ahí synaplite-respaldo-AAAA-MM-DD-HHMM.json, el mismo formato de «Exportar»; se
+   conservan las últimas BK_KEEP. Corre mientras la app esté abierta; si no lo estaba a esa
+   hora, lo hace en cuanto se abre. */
+const BK_KEEP=30, BK_PREFIX="synaplite-respaldo-";
+const BK={cfg:null,running:false,state:"",skip:false};
+const bkSupported=()=>"showDirectoryPicker" in window&&"indexedDB" in window;
+function bkDB(){ return new Promise((res,rej)=>{ const r=indexedDB.open("synaplite_bk",1); r.onupgradeneeded=()=>r.result.createObjectStore("kv"); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+async function bkGet(k){ const db=await bkDB(); return new Promise((res,rej)=>{ const q=db.transaction("kv").objectStore("kv").get(k); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); }); }
+async function bkPut(k,v){ const db=await bkDB(); return new Promise((res,rej)=>{ const q=db.transaction("kv","readwrite").objectStore("kv").put(v,k); q.onsuccess=()=>res(); q.onerror=()=>rej(q.error); }); }
+async function bkLoad(){ try{ BK.cfg=(await bkGet("cfg"))||null; }catch(e){ BK.cfg=null; } }
+async function bkSave(c){ BK.cfg=c; try{ await bkPut("cfg",c); }catch(e){} }
+/* El último horario de respaldo que ya debió ocurrir: hoy a la hora fijada, o ayer si aún no llega. */
+function bkLastSlot(time){
+  const [h,m]=(time||"21:00").split(":").map(Number), d=new Date(); d.setHours(h,m,0,0);
+  if(d>new Date()) d.setDate(d.getDate()-1);
+  return d;
+}
+function bkDue(){
+  if(BK.cfg&&BK.cfg.enabled) return !BK.cfg.lastAt||new Date(BK.cfg.lastAt)<bkLastSlot(BK.cfg.time);
+  if(!bkSupported()&&state.patients.length){            // sin carpeta posible: aviso para descargar a mano
+    let last=null; try{ last=localStorage.getItem("synaplite_bk_dl"); }catch(e){}
+    return !last||new Date(last)<bkLastSlot("21:00");
+  }
+  return false;
+}
+async function bkPermission(ask){
+  const c=BK.cfg; if(!c||!c.dir||!c.dir.queryPermission) return "denied";
+  const o={mode:"readwrite"}; let p=await c.dir.queryPermission(o);
+  if(p!=="granted"&&ask) p=await c.dir.requestPermission(o);
+  return p;
+}
+async function bkRun({force=false,ask=false}={}){
+  const c=BK.cfg; if(!c||!c.enabled||BK.running) return false;
+  if(!force&&!bkDue()) return false;
+  BK.running=true;
+  try{
+    if((await bkPermission(ask))!=="granted"){ BK.state="permiso"; bkPaint(); return false; }
+    const d=new Date(), pad=n=>String(n).padStart(2,"0");
+    const name=`${BK_PREFIX}${todayStr()}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
+    const fh=await c.dir.getFileHandle(name,{create:true}), w=await fh.createWritable();
+    await w.write(JSON.stringify(state,null,2)); await w.close();
+    const files=[]; for await (const [n,h] of c.dir.entries()) if(h.kind==="file"&&n.startsWith(BK_PREFIX)) files.push(n);
+    files.sort(); for(const n of files.slice(0,Math.max(0,files.length-BK_KEEP))) await c.dir.removeEntry(n).catch(()=>{});
+    await bkSave(Object.assign({},c,{lastAt:d.toISOString(),lastFile:name,lastError:null}));
+    BK.state="ok"; bkPaint(); return name;
+  }catch(e){
+    console.error(e); await bkSave(Object.assign({},c,{lastError:(e&&e.message)||String(e)})); BK.state="error"; bkPaint(); return false;
+  }finally{ BK.running=false; }
+}
+async function bkChoose(){
+  if(!bkSupported()){ toast("Este navegador no permite elegir carpeta. Usa Chrome o Edge.","err",4200); return; }
+  let dir; try{ dir=await window.showDirectoryPicker({id:"synaplite-respaldos",mode:"readwrite",startIn:"documents"}); }
+  catch(e){ return; }                                   // canceló
+  const time=(document.getElementById("bk-time")||{}).value||"21:00";
+  await bkSave({enabled:true,dir,dirName:dir.name,time,lastAt:null,lastFile:null,lastError:null});
+  const n=await bkRun({force:true,ask:true}); bkPaintSheet();
+  if(n) toast("Respaldo automático activado: "+n,"ok",3600);
+}
+async function bkNow(){
+  if(!BK.cfg||!BK.cfg.enabled){ exportData(); return; }
+  const n=await bkRun({force:true,ask:true}); bkPaintSheet();
+  if(n) toast("Copia guardada: "+n,"ok");
+}
+async function bkOff(){ if(BK.cfg) await bkSave(Object.assign({},BK.cfg,{enabled:false})); bkPaint(); bkPaintSheet(); toast("Respaldo automático desactivado"); }
+async function bkSetTime(v){ if(BK.cfg&&v){ await bkSave(Object.assign({},BK.cfg,{time:v})); bkPaint(); bkPaintSheet(); } }
+async function bkAuthorize(){ const n=await bkRun({force:true,ask:true}); bkPaintSheet(); if(n) toast("Copia guardada: "+n,"ok"); }
+function bkDownloadToday(){ exportData(); try{ localStorage.setItem("synaplite_bk_dl",new Date().toISOString()); }catch(e){} bkPaint(); }
+function bkLater(){ BK.skip=true; bkPaint(); }
+function bkPaint(){
+  const el=document.getElementById("bkbar"), btn=document.getElementById("bkBtn"); if(!el) return;
+  const c=BK.cfg, on=!!(c&&c.enabled);
+  if(btn) btn.classList.toggle("on",on&&BK.state!=="permiso"&&BK.state!=="error");
+  let html="";
+  if(on&&BK.state==="permiso") html=`<div class="sbar warn">${EDU_ICON.alerta}<span class="sbar-msg">El respaldo automático necesita tu autorización para escribir en la carpeta «${esc(c.dirName)}».</span><button class="link" onclick="bkAuthorize()">Autorizar</button></div>`;
+  else if(on&&c.lastError) html=`<div class="sbar err">${EDU_ICON.alerta}<span class="sbar-msg">Falló el respaldo automático: ${esc(c.lastError)}</span><button class="link" onclick="bkOpen()">Revisar</button></div>`;
+  else if(!on&&!BK.skip&&state.patients.length&&bkSupported()&&!(c&&c.dir)) html=`<div class="sbar warn">${EDU_ICON.alerta}<span class="sbar-msg">Sin respaldo automático: si se borran los datos del navegador, se pierden los pacientes.</span><button class="link" onclick="bkOpen()">Configurar</button><button class="link" onclick="bkLater()">Ahora no</button></div>`;
+  else if(!bkSupported()&&!BK.skip&&bkDue()) html=`<div class="sbar warn">${EDU_ICON.alerta}<span class="sbar-msg">Falta la copia de hoy. Este navegador no puede guardarla sola.</span><button class="link" onclick="bkDownloadToday()">Descargar copia</button><button class="link" onclick="bkLater()">Ahora no</button></div>`;
+  if(el.innerHTML!==html) el.innerHTML=html;
+}
+function bkOpen(){ bkPaintSheet(); document.getElementById("bk-ov").classList.add("on"); }
+function bkClose(){ document.getElementById("bk-ov").classList.remove("on"); }
+function bkPaintSheet(){
+  const box=document.getElementById("bk-body"); if(!box) return;
+  const c=BK.cfg, on=!!(c&&c.enabled), fm=iso=>iso?new Date(iso).toLocaleString("es-MX",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}):"nunca";
+  if(!bkSupported()){
+    box.innerHTML=`<p class="muted-note">Este navegador no permite guardar en una carpeta sola. El respaldo automático funciona en <b>Google Chrome</b> o <b>Microsoft Edge</b>. Mientras tanto, usa «Exportar» al menos una vez al día.</p>`;
+    return;
+  }
+  box.innerHTML=`<div class="bk-row"><span>Estado</span><b>${on?(BK.state==="permiso"?"Falta autorizar":c.lastError?"Con error":"Activo"):"Desactivado"}</b></div>
+    <div class="bk-row"><span>Carpeta</span><b>${c&&c.dirName?esc(c.dirName):"—"}</b></div>
+    <div class="bk-row"><span>Última copia</span><b>${fm(c&&c.lastAt)}</b></div>
+    <div class="bk-row"><span>Hora diaria</span><input type="time" id="bk-time" value="${esc((c&&c.time)||"21:00")}" onchange="bkSetTime(this.value)" style="width:auto"></div>
+    ${c&&c.lastFile?`<div class="muted-note">${esc(c.lastFile)}</div>`:""}
+    <div class="muted-note" style="margin-top:10px">La copia se guarda sola a esa hora <b>mientras la app esté abierta</b>. Si no lo estaba, se guarda en cuanto la abras. Se conservan las últimas ${BK_KEEP}; se restauran con «Importar».</div>
+    <div class="menu">
+      ${on?`<button class="btn ghost" style="flex:1" onclick="bkOff()">Desactivar</button><button class="btn ghost" style="flex:1" onclick="bkChoose()">Cambiar carpeta</button><button class="btn primary" style="flex:1.2" onclick="bkNow()">Respaldar ahora</button>`
+         :`<button class="btn primary" style="flex:1" onclick="bkChoose()">Elegir carpeta y activar</button>`}
+    </div>`;
+}
+async function bkInit(){
+  await bkLoad(); bkPaint();
+  setTimeout(()=>{ bkRun(); bkPaint(); },2500);
+  setInterval(()=>{ bkRun(); bkPaint(); },30000);
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ bkRun(); bkPaint(); } });
+}
+
 function exportData(){
   const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
   offerFile("synapmed-pase-"+todayStr()+".json", blob, "Copia exportada");
@@ -2913,12 +3034,14 @@ function importData(ev){
 
 /* ---------------- arranque ---------------- */
 document.getElementById("overlay").addEventListener("click",e=>{ if(e.target.id==="overlay") closeSheet(); });
+document.getElementById("bk-ov").addEventListener("click",e=>{ if(e.target.id==="bk-ov") bkClose(); });
 document.getElementById("date-ov").addEventListener("click",e=>{ if(e.target.id==="date-ov") closeDateEdit(); });
 document.getElementById("confirm-ov").addEventListener("click",e=>{ if(e.target.id==="confirm-ov") closeConfirm(); });
 document.getElementById("confirm-ok").addEventListener("click",()=>{ const cb=confirmCb; closeConfirm(); if(cb) cb(); });
 document.addEventListener("keydown",e=>{
   if(e.key==="Escape"){
-    if(document.getElementById("date-ov").classList.contains("on")) closeDateEdit();
+    if(document.getElementById("bk-ov").classList.contains("on")) bkClose();
+    else if(document.getElementById("date-ov").classList.contains("on")) closeDateEdit();
     else if(document.getElementById("confirm-ov").classList.contains("on")) closeConfirm();
     else if(document.getElementById("lightbox").classList.contains("on")) closeLightbox();
     else if(document.getElementById("overlay").classList.contains("on")) closeSheet();
@@ -2940,6 +3063,7 @@ paintThemeBtn();
 storageBroken=!storageOK();
 paintStorageBar();
 render();
+bkInit();
 
 </script>
 </body>

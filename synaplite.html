@@ -310,6 +310,10 @@
   .rate-tag{font-weight:700;color:var(--primary-strong);margin-left:8px}
   .nota-area{min-height:560px;font-family:ui-monospace,Menlo,monospace;font-size:14px;line-height:1.5}
   .pane-area>.pane:has(.nota-area){max-width:1040px}
+  .balform{display:grid;grid-template-columns:1fr 110px 120px auto;gap:8px;margin-top:6px}
+  .balform input,.balform select{font:inherit;font-size:16px;color:var(--text);background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);padding:8px 10px;min-height:44px;min-width:0;width:100%}
+  @media (max-width:640px){ .balform{grid-template-columns:1fr 1fr} }
+  .interp{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--primary-strong);border-radius:var(--radius-md);padding:12px 14px;font-size:15px;line-height:1.55}
   .add-row{display:flex;gap:8px;margin-top:10px}
   .add-row input{flex:1;background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);color:var(--text);
     height:40px;padding:0 12px;font-size:16px;min-width:0}
@@ -1436,7 +1440,7 @@ function detailHTML(p){
   const pane=openPanes[p.id]||"pres", seen=seenToday(p);
   const L=visiblePatients(), i=L.findIndex(x=>x.id===p.id);
   const sub=[p.age?esc(p.age)+" años":"",esc(p.sex||""),p.att?esc(p.att):""].filter(Boolean).join(" · ");
-  const panes={pres:presPaneHTML,sv:svPaneHTML,labs:labsPaneHTML,calc:calcPaneHTML,vma:vmaPaneHTML,tx:txPaneHTML,nota:notaPaneHTML,inf:txPaneHTML,meds:txPaneHTML,pend:pendPaneHTML,com:comPaneHTML,files:filesPaneHTML};
+  const panes={pres:presPaneHTML,sv:svPaneHTML,labs:labsPaneHTML,calc:calcPaneHTML,vma:vmaPaneHTML,tx:txPaneHTML,nota:notaPaneHTML,bal:balPaneHTML,inf:txPaneHTML,meds:txPaneHTML,pend:pendPaneHTML,com:comPaneHTML,files:filesPaneHTML};
   return `<div class="dhead">
       <div class="dhead-top">
         <button class="fb-back" onclick="closePatient()">${ARROW_L}Censo</button>
@@ -1473,6 +1477,7 @@ function detailHTML(p){
       <div class="seg" role="tablist">
         ${segBtn(p,'pres','Presentación','')}
         ${segBtn(p,'sv','Signos vitales','')}
+        ${segBtn(p,'bal','Balance','')}
         ${segBtn(p,'labs','Labs',nl?`<span class="cnt">${nl}</span>`:'')}
         ${segBtn(p,'calc','Cálculos','')}
         ${segBtn(p,'vma','VMA',onV?`<span class="dotv"></span>`:'')}
@@ -1610,7 +1615,9 @@ function sofaOf(p){
   // Neurológico
   const g=V?V.gcs:null; add("cns","Neuro",g===null?null:g<6?4:g<10?3:g<13?2:g<15?1:0,g===null?"falta Glasgow":"Glasgow "+g);
   // Renal (solo creatinina; la diuresis no se interpreta aquí)
-  const cr=lab("cr"); add("ren","Renal",cr===null?null:cr>=5?4:cr>=3.5?3:cr>=2?2:cr>=1.2?1:0,cr===null?"falta Cr":"Cr "+cr);
+  const cr=lab("cr"), bc=balLastClosed(p), du=bc&&bc.tot.diuN?bc.tot.diu:null;
+  const crP=cr===null?null:cr>=5?4:cr>=3.5?3:cr>=2?2:cr>=1.2?1:0, duP=du===null?null:du<200?4:du<500?3:null;
+  add("ren","Renal",crP===null&&duP===null?(du!==null?0:null):Math.max(crP||0,duP||0),[cr!==null?"Cr "+cr:"",du!==null?"diuresis "+Math.round(du)+" mL/24 h":""].filter(Boolean).join(" · ")||"falta Cr");
   const known=parts.filter(x=>x.pts!==null);
   return {total:known.reduce((a,x)=>a+x.pts,0),known:known.length,parts};
 }
@@ -1660,7 +1667,7 @@ function scalesHTML(p){
   const sofaSt=!s.known?"":s.total>=11?"bad":s.total>=2?"warn":"";
   cards.push(scaleCard("SOFA",s.known?s.total:"—",s.known?(s.known<6?`Parcial: ${s.known} de 6 componentes · `:"")+trendTxt(s.total,sn.prev,"sofa"):"Faltan datos",sofaSt,
     s.parts.map(x=>`<span class="cin ${x.pts===null?"na":""}" title="${esc(x.det)}"><em>${x.label}</em>${x.pts===null?"?":x.pts}<small>${esc(x.det)}</small></span>`).join(""),
-    "El renal usa solo creatinina. Un SOFA ≥ 2 sobre el basal define disfunción orgánica en sepsis."));
+    "El renal usa la creatinina y, si hay balance, la diuresis de 24 h. Un SOFA ≥ 2 sobre el basal define disfunción orgánica en sepsis."));
   if(q) cards.push(scaleCard("qSOFA",q.known===3?q.total+" de 3":"—",q.known===3?(q.total>=2?"≥ 2: alto riesgo de mala evolución":"< 2"):`Faltan: ${q.c.filter(x=>x[1]===null).map(x=>x[0]).join(", ")}`,q.known===3&&q.total>=2?"bad":q.total===1?"warn":"",
     q.c.map(x=>chip(x[0],x[1]===null?"?":x[1]?"sí":"no")).join(""),"Signos de "+fmtTime(q.ts)));
   if(n){
@@ -1797,12 +1804,15 @@ function notaText(p){
   L.push(`Respiratorio: ${[V&&V.sato2?"SatO₂ "+V.sato2+"%":"",V&&V.fr?"FR "+V.fr:""].filter(Boolean).join(", ")}${V&&(V.sato2||V.fr)?". ":""}${TBD}`);
   L.push(`Cardiovascular: ${[V&&V.ta?"TA "+V.ta:"",pam?"PAM "+pam:"",V&&V.fc?"FC "+V.fc:""].filter(Boolean).join(", ")}${V&&(V.ta||V.fc)?". ":""}${TBD}`);
   L.push(`Gastrointestinal / Metabólico: ${V&&V.gluc?"Glucosa capilar "+V.gluc+". ":""}${TBD}`);
-  L.push(`Genitourinario: ${[V&&V.diuresis?"Diuresis "+V.diuresis:"",V&&V.balance?"Balance "+V.balance:""].filter(Boolean).join(", ")}${V&&(V.diuresis||V.balance)?". ":""}${TBD}`);
+  const bt=balText(p);
+  L.push(`Genitourinario: ${bt?bt+" ":[V&&V.diuresis?"Diuresis "+V.diuresis:"",V&&V.balance?"Balance "+V.balance:""].filter(Boolean).join(", ")+(V&&(V.diuresis||V.balance)?". ":"")}${TBD}`);
   L.push(`Extremidades: ${TBD}`);
   L.push(`Dispositivos invasivos: ${TBD}`);
   L.push("","PARACLÍNICOS");
   L.push(lab?`(${fmtShort(lab.ts)}) ${labsToText(lab)}`:"Sin laboratorios registrados.");
   const dv=lab?labDerived(lab,p):[]; if(dv.length) L.push("Cálculos: "+dv.map(x=>`${x.label} ${x.value}`).join(", ")+".");
+  const gr=(p.labs||[]).slice().reverse().find(r=>Object.keys(r).some(k=>GAS_ONLY.has(k)&&r[k])), gi=gr?gasInterp(gr,p):"";
+  if(gi) L.push("Interpretación gasométrica ("+fmtShort(gr.ts)+"): "+gi);
   const sc=[]; if(s.known) sc.push(`SOFA ${s.total}${s.known<6?" ("+s.known+" de 6 componentes)":""}`);
   if(q&&q.known===3) sc.push(`qSOFA ${q.total}`); if(n&&n.known>=7) sc.push(`NEWS2 ${n.total}`);
   if(sc.length) L.push("Escalas: "+sc.join(", ")+".");
@@ -1840,6 +1850,194 @@ function copyNota(id,btn){
   const done=()=>{ if(btn){ const o=btn.textContent; btn.textContent="Copiada"; setTimeout(()=>{ btn.textContent=o; },1400); } };
   if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done).catch(()=>fallbackCopy(t,done));
   else fallbackCopy(t,done);
+}
+
+/* ---------------- balance hídrico por turno ---------------- */
+/* Periodo de 24 h de 07:00 a 07:00. Turnos: matutino 07–14, vespertino 14–21, nocturno 21–07. */
+const SHIFTS=[{k:"M",label:"Matutino",from:0,to:7},{k:"V",label:"Vespertino",from:7,to:14},{k:"N",label:"Nocturno",from:14,to:24}];
+const BAL_IN=["Vía oral / enteral","Soluciones IV","Hemoderivados","Medicamentos e infusiones","Nutrición parenteral","Otro ingreso"];
+const BAL_OUT=["Diuresis","Evacuaciones","Drenajes","Vómito / sonda NG","Hemorragia","Otro egreso"];
+const balOff={};
+function balPeriodStart(d){ const x=new Date(d); if(x.getHours()<7) x.setDate(x.getDate()-1); x.setHours(7,0,0,0); return x; }
+function balShift(start,ts){ const h=(new Date(ts)-start)/36e5; return SHIFTS.findIndex(s=>h>=s.from&&h<s.to); }
+function balStats(p,start,now){
+  const end=new Date(start.getTime()+864e5);
+  const ents=(p.balance||[]).filter(e=>{ const t=new Date(e.ts); return t>=start&&t<end; });
+  const w=pesoKg(p), pi=!!p.balPI&&!!w;
+  const rows=SHIFTS.map(s=>{
+    const a=start.getTime()+s.from*36e5, b=start.getTime()+s.to*36e5;
+    const hrs=Math.max(0,Math.min(now.getTime(),b)-a)/36e5;
+    return {s,hrs,len:s.to-s.from,inn:0,out:0,diu:0,diuN:0,piMl:pi?0.5*w*hrs:0};
+  });
+  ents.forEach(e=>{
+    const i=balShift(start,e.ts); if(i<0) return; const r=rows[i], ml=+e.ml||0;
+    if(e.k==="in") r.inn+=ml; else { r.out+=ml; if(e.cat==="Diuresis"){ r.diu+=ml; r.diuN++; } }
+  });
+  const tot={inn:0,out:0,diu:0,diuN:0,piMl:0,hrs:0};
+  rows.forEach(r=>{ r.net=r.inn-r.out-r.piMl; r.rate=(w&&r.hrs>=1&&r.diuN)?r.diu/r.hrs/w:null; Object.keys(tot).forEach(k=>tot[k]+=r[k]); });
+  tot.net=tot.inn-tot.out-tot.piMl; tot.rate=(w&&tot.hrs>=1&&tot.diuN)?tot.diu/tot.hrs/w:null;
+  return {start,end,rows,tot,ents,w,pi,closed:now>=end};
+}
+/* Último periodo de 24 h completo (para el SOFA renal y la nota). */
+function balLastClosed(p){
+  const now=new Date(), cur=balPeriodStart(now), prev=new Date(cur.getTime()-864e5);
+  const st=balStats(p,prev,now); return st.ents.length?st:null;
+}
+function rateSt(r){ return r===null?"":r<0.3?"bad":r<0.5?"warn":""; }
+const fmtMl=n=>(n>0?"+":n<0?"−":"")+Math.abs(Math.round(n));
+function balPaneHTML(p){
+  const now=new Date(), off=balOff[p.id]||0;
+  const start=new Date(balPeriodStart(now).getTime()-off*864e5);
+  const st=balStats(p,start,now), w=st.w;
+  const dl=d=>d.toLocaleString("es-MX",{day:"2-digit",month:"2-digit"});
+  const hh=now.toTimeString().slice(0,5);
+  const nav=`<div class="note-line"><button class="link" onclick="balNav('${p.id}',1)">◀ día anterior</button>
+    <span class="on" style="color:var(--text)">${dl(start)} 07:00 → ${dl(st.end)} 07:00${off===0?" (en curso)":""}</span>
+    ${off>0?`<button class="link" onclick="balNav('${p.id}',-1)">día siguiente ▶</button>`:""}</div>`;
+  const cell=(v,cls)=>`<td class="now"><span class="num ${cls||""}">${v}</span></td>`;
+  const head=`<th>Periodo</th>${SHIFTS.map(s=>`<th>${s.label}</th>`).join("")}<th class="now">24 h</th>`;
+  const row=(lbl,fn,tot)=>`<tr><td class="lname">${lbl}</td>${st.rows.map(fn).join("")}${tot}</tr>`;
+  const table=`<div class="table-wrap"><table class="labs-table"><thead><tr>${head}</tr></thead><tbody>
+    ${row("Ingresos",r=>`<td class="old">${r.inn?Math.round(r.inn):"—"}</td>`,cell(Math.round(st.tot.inn)))}
+    ${row("Egresos",r=>`<td class="old">${r.out?Math.round(r.out):"—"}</td>`,cell(Math.round(st.tot.out)))}
+    ${st.pi?row("Pérdidas insensibles*",r=>`<td class="old">${r.hrs?Math.round(r.piMl):"—"}</td>`,cell(Math.round(st.tot.piMl))):""}
+    ${row("Balance",r=>`<td class="old"><span class="num" style="font-weight:700">${(r.inn||r.out||r.piMl)?fmtMl(r.net):"—"}</span></td>`,cell(fmtMl(st.tot.net)))}
+    ${row("Diuresis mL/kg/h",r=>`<td class="old"><span class="num ${rateSt(r.rate)}">${r.rate!==null?(Math.round(r.rate*100)/100):"—"}</span></td>`,cell(st.tot.rate!==null?(Math.round(st.tot.rate*100)/100):"—",rateSt(st.tot.rate)))}
+    </tbody></table></div>
+    <div class="muted-note" style="margin-top:8px">${w?`Peso ${w} kg. `:"<b>Falta el peso</b> en «Editar datos»: sin él no se calcula mL/kg/h. "}Diuresis &lt; 0.5 mL/kg/h en vigilancia y &lt; 0.3 en grave (KDIGO). ${st.closed?"":"El 24 h es parcial: el periodo sigue en curso."}</div>`;
+  const opts=`<optgroup label="Ingresos">${BAL_IN.map(c=>`<option value="in|${c}">${c}</option>`).join("")}</optgroup><optgroup label="Egresos">${BAL_OUT.map(c=>`<option value="out|${c}" ${c==="Diuresis"?"selected":""}>${c}</option>`).join("")}</optgroup>`;
+  const form=`<div class="sec-title">Registrar</div><div class="balform">
+    <select id="bc-${p.id}" aria-label="Tipo">${opts}</select>
+    <input id="bm-${p.id}" inputmode="decimal" placeholder="mL" autocomplete="off" onkeydown="if(event.key==='Enter')addBal('${p.id}')">
+    <input id="bt-${p.id}" type="time" value="${off===0?hh:"12:00"}" aria-label="Hora">
+    <button class="btn primary" onclick="addBal('${p.id}')">Agregar</button></div>`;
+  const list=st.ents.length?`<div class="items">${st.ents.slice().sort((a,b)=>a.ts<b.ts?1:-1).map(e=>{
+      const s=SHIFTS[balShift(start,e.ts)];
+      return `<div class="item"><div class="it">${esc(e.cat)} <span class="dose">${e.k==="in"?"+":"−"}${Math.round(e.ml)} mL · ${fmtHour(e.ts)} · ${s?s.label:""}</span></div>
+        <button class="del" onclick="delBal('${p.id}','${e.id}')" title="Eliminar">×</button></div>`; }).join("")}</div>`:`<div class="muted-note">Sin registros en este periodo.</div>`;
+  const pi=`<label class="cfio" style="flex-direction:row;align-items:center;gap:8px;margin-top:10px"><input type="checkbox" ${p.balPI?"checked":""} ${w?"":"disabled"} onchange="balTogglePI('${p.id}')" style="width:auto;min-height:0"> Incluir pérdidas insensibles estimadas (0.5 mL/kg/h)</label>`;
+  // últimos días
+  const hist=[]; const cur=balPeriodStart(now);
+  for(let i=0;i<7;i++){ const s=new Date(cur.getTime()-i*864e5), x=balStats(p,s,now); if(x.ents.length) hist.push(x); }
+  const histHTML=hist.length>1?`<div class="sub-title">Últimos días</div><div class="table-wrap"><table class="labs-table"><thead><tr><th>Periodo</th><th>Ingresos</th><th>Egresos</th><th class="now">Balance</th><th>Diuresis</th></tr></thead><tbody>
+    ${hist.map(x=>`<tr><td class="lname">${dl(x.start)}</td><td class="old">${Math.round(x.tot.inn)}</td><td class="old">${Math.round(x.tot.out+x.tot.piMl)}</td><td class="now"><span class="num">${fmtMl(x.tot.net)}</span></td><td class="old">${Math.round(x.tot.diu)}${x.tot.rate!==null?` · ${Math.round(x.tot.rate*100)/100}`:""}</td></tr>`).join("")}
+    </tbody></table></div><div class="muted-note" style="margin-top:6px">Balance acumulado de estos días: <b>${fmtMl(hist.reduce((a,x)=>a+x.tot.net,0))} mL</b>. Diuresis en mL y mL/kg/h.</div>`:"";
+  return `${nav}<div class="sec-title">Balance por turno</div>${table}${pi}${form}<div class="sec-title">Registros del periodo</div>${list}${histHTML}`;
+}
+function balNav(id,d){ balOff[id]=Math.max(0,(balOff[id]||0)+d); refresh(id); }
+function balTogglePI(id){ const p=find(id); if(!p) return; p.balPI=!p.balPI; save(); refresh(id); }
+function addBal(id){
+  const p=find(id); if(!p) return;
+  const sel=document.getElementById("bc-"+id).value.split("|"), ml=num(document.getElementById("bm-"+id).value), tm=document.getElementById("bt-"+id).value||"12:00";
+  if(ml===null||ml<=0){ const e=document.getElementById("bm-"+id); if(e) e.focus(); toast("Escribe los mL","err"); return; }
+  const now=new Date(), start=new Date(balPeriodStart(now).getTime()-(balOff[id]||0)*864e5);
+  const [h,m]=tm.split(":").map(Number); let t=new Date(start); t.setHours(h,m,0,0);
+  if(h<7) t=new Date(t.getTime()+864e5);          // 00:00–06:59 pertenece a la madrugada del día siguiente
+  if(t>now) t=now;
+  p.balance=p.balance||[]; p.balance.push({id:uid(),ts:t.toISOString(),k:sel[0],cat:sel[1],ml});
+  openPanes[id]="bal"; save(); refresh(id);
+  const e=document.getElementById("bm-"+id); if(e) e.focus();
+}
+function delBal(pid,eid){ const p=find(pid); if(!p) return; p.balance=(p.balance||[]).filter(x=>x.id!==eid); openPanes[pid]="bal"; save(); refresh(pid); }
+/* Línea para la nota y el resumen: último periodo completo, o el que va en curso. */
+function balText(p){
+  const done=balLastClosed(p), now=new Date();
+  const st=done||(()=>{ const x=balStats(p,balPeriodStart(now),now); return x.ents.length?x:null; })();
+  if(!st) return "";
+  const dl=d=>d.toLocaleString("es-MX",{day:"2-digit",month:"2-digit"});
+  const diu=st.tot.diuN?`Diuresis ${Math.round(st.tot.diu)} mL${st.tot.rate!==null?` (${Math.round(st.tot.rate*100)/100} mL/kg/h)`:""}. `:"";
+  return `${diu}Ingresos ${Math.round(st.tot.inn)} mL, egresos ${Math.round(st.tot.out+st.tot.piMl)} mL, balance ${fmtMl(st.tot.net)} mL (${done?"24 h":"parcial"} ${dl(st.start)} 07:00${done?" a "+dl(st.end)+" 07:00":", en curso"}).`;
+}
+
+/* ---------------- interpretación de la gasometría (borrador con reglas) ---------------- */
+function gasInterp(r,p){
+  const n=k=>labNum(k,r[k]), ven=/ven/.test(norm(r.gtipo||""));
+  const ph=n("ph"), pc=n("pco2"), po=n("po2"), lac=n("lactato");
+  let hco=n("hco3"); if(hco===null) hco=n("tco2");
+  const R=(x,d)=>{ const f=Math.pow(10,d||0); return Math.round(x*f)/f; };
+  const phLo=ven?7.31:7.35, phHi=ven?7.41:7.45, mid=ven?7.36:7.40, pcLo=ven?41:35, pcHi=ven?51:45;
+  const out=[], titulo="Gasometría"+(r.gtipo?" "+r.gtipo:"");
+  let prim="", metAcid=false;
+  if(ph!==null&&(pc!==null||hco!==null)){
+    const acid=ph<phLo, alk=ph>phHi;
+    const pH_=pc!==null&&pc>pcHi, pL_=pc!==null&&pc<pcLo, hL=hco!==null&&hco<22, hH=hco!==null&&hco>26;
+    const phTxt=ph<7.20?"acidemia grave":ph<phLo?"acidemia":ph>7.55?"alcalemia grave":ph>phHi?"alcalemia":"pH en rango";
+    let kind=null;
+    if(acid){ kind=hL&&pH_?"mixta-ac":hL?"met-ac":pH_?"res-ac":"ac-nd"; }
+    else if(alk){ kind=hH&&pL_?"mixta-al":hH?"met-al":pL_?"res-al":"al-nd"; }
+    else if(hL&&pL_) kind=ph<mid?"met-ac-comp":"res-al-comp";
+    else if(hH&&pH_) kind=ph<mid?"res-ac-comp":"met-al-comp";
+    else if(hL&&pH_) kind="mixta-ac"; else if(hH&&pL_) kind="mixta-al";
+    else kind=(hL||hH||pH_||pL_)?"parcial":"normal";
+    const comp=(txt)=>txt?", "+txt:"";
+    if(kind==="met-ac"||kind==="met-ac-comp"){
+      metAcid=true; let c="";
+      if(pc!==null){ const e=1.5*hco+8; c=pc>e+2?`con acidosis respiratoria agregada (pCO₂ esperada ${R(e-2,1)}–${R(e+2,1)})`:pc<e-2?`con alcalosis respiratoria agregada (pCO₂ esperada ${R(e-2,1)}–${R(e+2,1)})`:"con compensación respiratoria adecuada"; }
+      prim=(kind==="met-ac-comp"?"acidosis metabólica con pH en rango por compensación respiratoria":phTxt+" por acidosis metabólica")+comp(c);
+    } else if(kind==="met-al"||kind==="met-al-comp"){
+      let c=""; if(pc!==null){ const e=40+0.7*(hco-24); c=pc>e+5?"con acidosis respiratoria agregada":pc<e-5?"con alcalosis respiratoria agregada":"con compensación respiratoria esperada"; }
+      prim=(kind==="met-al-comp"?"alcalosis metabólica con pH en rango":phTxt+" por alcalosis metabólica")+comp(c);
+    } else if(kind==="res-ac"||kind==="res-ac-comp"){
+      let c=""; if(hco!==null){ const d=pc-40, ag=24+0.1*d, cr=24+0.35*d; c=hco<=ag+1.5?"de aspecto agudo, sin compensación renal":hco>=cr-2?"con compensación renal compatible con curso crónico":"parcialmente compensada (aguda sobre crónica o subaguda)"; }
+      prim=(kind==="res-ac-comp"?"acidosis respiratoria con pH en rango":phTxt+" por acidosis respiratoria")+comp(c);
+    } else if(kind==="res-al"||kind==="res-al-comp"){
+      let c=""; if(hco!==null){ const d=40-pc, ag=24-0.2*d, cr=24-0.45*d; c=hco>=ag-1.5?"de aspecto agudo, sin compensación renal":hco<=cr+2?"con compensación renal compatible con curso crónico":"parcialmente compensada"; }
+      prim=(kind==="res-al-comp"?"alcalosis respiratoria con pH en rango":phTxt+" por alcalosis respiratoria")+comp(c);
+    } else if(kind==="mixta-ac"){ metAcid=true; prim=phTxt+" por trastorno mixto (acidosis metabólica y respiratoria)"; }
+    else if(kind==="mixta-al") prim=phTxt+" por trastorno mixto (alcalosis metabólica y respiratoria)";
+    else if(kind==="ac-nd"||kind==="al-nd") prim=phTxt+" con bicarbonato y pCO₂ en rango, sin trastorno primario definible con estos datos";
+    else if(kind==="parcial") prim="pH en rango con alteración aislada de "+(hL?"bicarbonato bajo":hH?"bicarbonato alto":pH_?"pCO₂ alta":"pCO₂ baja")+", sugiere compensación o trastorno mixto";
+    else prim="equilibrio ácido-base normal";
+    out.push(titulo+" compatible con "+prim+".");
+  } else if(ph!==null){ out.push(titulo+": "+(ph<phLo?"acidemia":ph>phHi?"alcalemia":"pH en rango")+"; faltan pCO₂ y bicarbonato para clasificar el trastorno."); }
+  // brecha aniónica
+  if(metAcid||(hco!==null&&hco<22)){
+    const na=n("gna"), cl=n("gcl"); let ag=null;
+    if(na!==null&&cl!==null&&hco!==null) ag=na-cl-hco; else if(n("gag")!==null) ag=n("gag");
+    if(ag!==null){
+      const alb=labLatest(p,"alb"), ac=alb?ag+2.5*(4-alb.n):ag, x=R(ac,1);
+      if(ac>12){
+        let dd=""; if(hco<24){ const d=(ac-12)/(24-hco); dd=d<1?"; la relación delta-delta < 1 sugiere acidosis hiperclorémica agregada":d>2?"; la relación delta-delta > 2 sugiere alcalosis metabólica agregada":"; la relación delta-delta es compatible con acidosis de brecha pura"; }
+        out.push(`Brecha aniónica elevada (${x}${alb?", corregida por albúmina":""})${dd}.`);
+      } else out.push(`Brecha aniónica normal (${x}${alb?", corregida por albúmina":""}), compatible con acidosis hiperclorémica.`);
+    }
+  }
+  // oxigenación y ventilación
+  if(ven){ out.push("Al ser venosa no permite valorar la oxigenación."); }
+  else if(po!==null){
+    const fio=fioFor(p,r);
+    if(fio){ const pf=R(po/fio.n,0); out.push(`Oxigenación ${pf>300?"sin alteración":pf>200?"alterada, leve":pf>100?"alterada, moderada":"gravemente alterada"} (PaFi ${pf}, FiO₂ ${Math.round(fio.n*100)} %).`); }
+    else out.push(`PaO₂ de ${po} mmHg ${po<60?"con hipoxemia importante":po<80?"con hipoxemia leve":"sin hipoxemia"}; sin FiO₂ registrada no se calcula la PaFi.`);
+  }
+  if(pc!==null&&prim&&!/respiratoria|mixto/.test(prim)) out.push(pc>pcHi?"Hipoventilación alveolar.":pc<pcLo?"Hiperventilación alveolar.":"Ventilación alveolar adecuada.");
+  // lactato
+  if(lac!==null) out.push(lac>=4?`Hiperlactatemia grave (${lac}), con datos de hipoperfusión tisular hasta demostrar lo contrario.`:lac>2?`Hiperlactatemia (${lac}); correlacionar con perfusión y otras causas (metformina, hepática, adrenérgica).`:`Lactato normal, sin datos de hipoperfusión por este marcador.`);
+  // electrolitos y otros del gasómetro
+  const o=[]; const v=k=>n(k);
+  if(v("gna")!==null){ const x=v("gna"); if(x<135) o.push(x<125?"hiponatremia grave":"hiponatremia"); else if(x>145) o.push(x>155?"hipernatremia grave":"hipernatremia"); }
+  if(v("gk")!==null){ const x=v("gk"); if(x<3.5) o.push(x<3?"hipokalemia grave":"hipokalemia"); else if(x>5) o.push(x>6?"hiperkalemia grave":"hiperkalemia"); }
+  if(v("gcl")!==null){ const x=v("gcl"); if(x<98) o.push("hipocloremia"); else if(x>107) o.push("hipercloremia"); }
+  if(v("cai")!==null){ const x=v("cai"); if(x<1.12) o.push(x<0.9?"hipocalcemia iónica grave":"hipocalcemia iónica"); else if(x>1.32) o.push("hipercalcemia iónica"); }
+  if(v("ggl")!==null){ const x=v("ggl"); if(x<70) o.push(x<54?"hipoglucemia grave":"hipoglucemia"); else if(x>180) o.push(x>250?"hiperglucemia importante":"hiperglucemia"); }
+  if(v("ghb")!==null){ const x=v("ghb"); const lo=sexOf(p)==="F"?12:13.5; if(x<lo) o.push(x<7?"anemia grave, en umbral transfusional":x<10?"anemia moderada":"anemia leve"); }
+  if(v("cohb")!==null&&v("cohb")>5) o.push("carboxihemoglobina elevada");
+  if(v("methb")!==null&&v("methb")>1.5) o.push("metahemoglobina elevada");
+  if(o.length) out.push("En los electrolitos y metabolitos del gasómetro: "+o.join(", ")+".");
+  else if(["gna","gk","gcl","cai","ggl","ghb"].some(k=>v(k)!==null)) out.push("Electrolitos, glucosa y hemoglobina del gasómetro sin alteraciones relevantes.");
+  return out.join(" ");
+}
+function gasInterpBox(p,r){
+  const t=gasInterp(r,p); if(!t) return "";
+  return `<div class="sub-title">Interpretación automática <span class="stamp">borrador por reglas; confírmala con el contexto clínico</span></div>
+    <div class="interp" id="interp-${p.id}">${esc(t)}</div>
+    <div class="add-row" style="margin-top:8px"><button class="btn ghost sm" onclick="copyGasInterp('${p.id}',this)">Copiar interpretación</button></div>`;
+}
+function copyGasInterp(id,btn){
+  const p=find(id); if(!p) return;
+  const rec=(p.labs||[]).slice().reverse().find(r=>Object.keys(r).some(k=>GAS_ONLY.has(k)&&r[k])); if(!rec) return;
+  const t=gasInterp(rec,p);
+  const done=()=>{ if(btn){ const o=btn.textContent; btn.textContent="Copiada"; setTimeout(()=>{ btn.textContent=o; },1400); } };
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done).catch(()=>fallbackCopy(t,done)); else fallbackCopy(t,done);
 }
 
 function calcPaneHTML(p){
@@ -2103,6 +2301,7 @@ function labsTable(p){
     ${trendsHTML(p,SPARK_KEYS)}`:`<div class="muted-note">Sin química ni biometría registradas; solo gasometría.</div>`}
     ${gas?`<div class="sec-title">Gasometría <span class="stamp">${gas.latest.gtipo?esc(gas.latest.gtipo)+" · ":""}${fmtTime(gas.latest.ts)}</span></div>${gas.html}
     ${gdrv.length?`<div class="sub-title">Cálculos de la gasometría</div>${drvRow(gdrv)}`:""}
+    ${gasInterpBox(p,gas.latest)}
     ${trendsHTML(p,GAS_SPARK)}`:`<div class="sec-title">Gasometría</div><div class="muted-note">Sin gasometrías. Pégala con el encabezado «Gasometría arterial:» y todo lo que sigue se toma como del gasómetro (pH, gases, electrolitos, glucosa, lactato, Hb…).</div>`}
     <div class="add-row" style="margin-top:8px">
       <button class="btn ghost sm" style="flex:1" onclick="copyLabs('${p.id}',this)">Copiar último set en formato de nota</button>
@@ -2517,6 +2716,7 @@ function copySummary(id){
   const lab=(p.labs||[]).slice(-1)[0];
   if(lab) L.push(`Labs (${fmtShort(lab.ts)}): `+labsToText(lab));
   if((p.otros||[]).length) L.push(`Otros estudios: `+otrosText(p));
+  const bt2=balText(p); if(bt2) L.push(`Balance: `+bt2);
   const vm=lastVMA(p);
   if(p.onVMA&&vm) L.push(`VMA: `+VMA_FIELDS.filter(f=>vm[f.k]).map(f=>`${f.label} ${vm[f.k]}`).join(", "));
   const inf=activeInf(p);

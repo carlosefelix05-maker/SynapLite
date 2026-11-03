@@ -25,6 +25,16 @@ Se publica igual que la app de finanzas. Cada `git push` a `main` ejecuta `build
 
 Alternativa sin git: Netlify Drop. Ejecuta `python3 build_app.py` y arrastra la carpeta `app` a https://app.netlify.com/drop (requiere una cuenta gratuita).
 
+## Alternativa: abrirla desde tu Mac (localhost), como SynapMed
+
+No necesita internet ni GitHub.
+
+1. Doble clic en **`Iniciar SynapLite.command`**. Regenera `app/`, inicia el servidor en segundo plano y abre `http://localhost:8766`. Puedes cerrar la ventana que aparece.
+2. En Chrome: ⋮ → **Transmitir, guardar y compartir → Instalar página como app** (o el ícono de instalar en la barra de direcciones).
+3. **`Detener SynapLite.command`** apaga el servidor; los datos no se borran.
+
+La app instalada desde `localhost:8766` solo abre si el servidor está encendido. Los datos se guardan por dirección: la copia de `localhost:8766` y la de GitHub Pages son bases separadas (pasa los datos con Exportar e Importar).
+
 ## 2. Instalarla
 - **Chrome en computadora:** abre la dirección y pulsa el ícono de instalar en la barra de direcciones. También puedes ir a ⋮ → *Transmitir, guardar y compartir* → *Instalar página como app*.
 - **Android (Chrome):** ⋮ → *Instalar app* o *Agregar a la pantalla principal*.

@@ -1431,6 +1431,8 @@ function vitalsPreview(p){
 /* Cada fórmula toma el valor MÁS RECIENTE de cada dato (laboratorios, signos vitales,
    VMA, ficha del paciente) y avisa cuando faltan datos o vienen de días distintos. */
 const calcFio2={};
+/* Los Mochis, Sinaloa (≈ 10 msnm): presión barométrica por la fórmula de la atmósfera estándar. */
+const ALT_M=10, PATM=Math.round(760*Math.exp(-ALT_M/8434));
 function labLatest(p,k){
   const L=p.labs||[];
   for(let i=L.length-1;i>=0;i--){ const n=labNum(k,L[i][k]); if(n!==null) return {n,ts:L[i].ts,rec:L[i]}; }
@@ -1502,6 +1504,11 @@ function calcPaneHTML(p){
       const g=Math.round(po/f), tipo=(labLatest(p,"po2").rec.gtipo||"").toLowerCase();
       return {v:g,u:"mmHg",sub:g<=100?"Grave (Berlín)":g<=200?"Moderado (Berlín)":g<=300?"Leve (Berlín)":"> 300",st:g<=200?"bad":g<=300?"warn":"",
         note:/ven/.test(tipo)?"La gasometría es venosa: la PaFi sólo aplica a sangre arterial.":""};
+    }),
+    calcCard("Gradiente A-a de O₂ · Los Mochis ("+ALT_M+" msnm)","FiO₂ × (Patm − 47) − pCO₂ ÷ 0.8 − PaO₂; Patm = "+PATM+" mmHg; esperado = edad ÷ 4 + 4",[lab("po2","pO₂"),lab("pco2","pCO₂"),fi,edad],(po,pc,f,a)=>{
+      const pa=f*(PATM-47)-pc/0.8, g=R(pa-po,1), esp=R(a/4+4,1), tipo=(labLatest(p,"po2").rec.gtipo||"").toLowerCase();
+      return {v:g,u:"mmHg",sub:"PAO₂ "+R(pa,1)+" · esperado para la edad ≈ "+esp,st:g>esp+20?"bad":g>esp?"warn":"",
+        note:/ven/.test(tipo)?"La gasometría es venosa: el gradiente sólo aplica a sangre arterial.":(f>0.3?"Con FiO₂ alta el gradiente normal sube (≈ 5–7 mmHg por cada 10 % de FiO₂).":"")};
     }),
     calcCard("SpO₂ / FiO₂","SatO₂ ÷ FiO₂ (último signo vital)",[withTs({l:"SatO₂",x:sat!==null?{n:sat}:null}),fi],(s,f)=>{
       const g=Math.round(s/f);

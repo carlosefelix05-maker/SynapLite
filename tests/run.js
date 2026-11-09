@@ -176,6 +176,13 @@ await t("entrega de guardia: texto con gravedad",()=>{
   const tx=ev(`entregaText()`); ok(/ANA/.test(tx)&&/EN VIGILANCIA/.test(tx),tx);
 });
 
+await t("tendencias: la gráfica usa fechas ISO sin NaN",()=>{
+  const d=n=>new Date(Date.now()-n*864e5).toISOString();
+  ev(`state={patients:[${JSON.stringify(base({labs:[{ts:d(2),cr:"1.2"},{ts:d(1),cr:"1.8"},{ts:d(0),cr:"2.4"}]}))}]}`);
+  const h=ev(`trendsHTML(state.patients[0],["cr"])`);
+  ok(/<path d="M[\d.]+ [\d.]+ L/.test(h)&&!/NaN/.test(h),h.slice(0,300));
+});
+
 console.log(`\n${pass} pruebas pasaron, ${fail} fallaron`);
 fails.forEach(f=>console.log("  ✗ "+f));
 process.exit(fail?1:0);

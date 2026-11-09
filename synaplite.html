@@ -1958,9 +1958,9 @@ function scalesHTML(p){
 const SPARK_KEYS=["cr","bun","na","k","glu","leu","hb","plaq","pcr","pct","alb","bt","inr"];
 const GAS_SPARK=["ph","pco2","po2","hco3","lactato","cai","gna","gk","ggl","ghb"];
 function sparkSVG(pts,st){
-  const w=120,h=34,pad=4, xs=pts.map(x=>x.ts), ys=pts.map(x=>x.n);
+  const w=120,h=34,pad=4, xs=pts.map(x=>+new Date(x.ts)), ys=pts.map(x=>x.n);
   const x0=Math.min.apply(null,xs), x1=Math.max.apply(null,xs), y0=Math.min.apply(null,ys), y1=Math.max.apply(null,ys);
-  const X=t=>x1===x0?w/2:pad+(t-x0)/(x1-x0)*(w-2*pad), Y=v=>y1===y0?h/2:h-pad-(v-y0)/(y1-y0)*(h-2*pad);
+  const X=t=>{ t=+new Date(t); return x1===x0?w/2:pad+(t-x0)/(x1-x0)*(w-2*pad); }, Y=v=>y1===y0?h/2:h-pad-(v-y0)/(y1-y0)*(h-2*pad);
   const d=pts.map((q,i)=>(i?"L":"M")+X(q.ts).toFixed(1)+" "+Y(q.n).toFixed(1)).join(" ");
   const last=pts[pts.length-1];
   return `<svg class="spk ${st||""}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${X(last.ts).toFixed(1)}" cy="${Y(last.n).toFixed(1)}" r="2.8" fill="currentColor"/></svg>`;
